@@ -13,6 +13,9 @@
 		}
 	}
 
+	// Install Chromium and its system library dependencies for E2E tests (Rod/CDP).
+	"postCreateCommand": "sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends chromium"
+
 	// 👇 Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
 

@@ -20,6 +20,12 @@ func Open(dsn string, fsys fs.FS) (*sql.DB, error) {
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
 
+	// SQLite is not a networked database. A connection pool offers no benefit
+	// and actively harms in-memory databases, where each connection gets its
+	// own independent database instance. One connection for the lifetime of the
+	// process is correct for both file and in-memory usage.
+	database.SetMaxOpenConns(1)
+
 	pragmas := []string{
 		"PRAGMA journal_mode=WAL;",
 		"PRAGMA foreign_keys=ON;",

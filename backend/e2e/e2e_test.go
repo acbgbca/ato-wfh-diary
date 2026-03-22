@@ -14,8 +14,6 @@ import (
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
-	"github.com/go-rod/rod/lib/proto"
-	"github.com/ysmood/gson"
 )
 
 // newE2EServer starts a test HTTP server with a real in-memory SQLite database
@@ -53,13 +51,15 @@ func newPage(t *testing.T, username string) (*rod.Browser, *rod.Page) {
 
 	page := browser.MustPage("")
 
-	// Inject the Forward Auth header for every request from this page.
-	setHeaders := proto.NetworkSetExtraHTTPHeaders{
-		Headers: proto.NetworkHeaders{"X-Test-User": gson.New(username)},
-	}
-	if err := setHeaders.Call(page); err != nil {
+	// Inject the Forward Auth header for every request from this page,
+	// including fetch() calls made by JavaScript.  The high-level
+	// SetExtraHeaders enables the network domain before applying the headers,
+	// which is required for them to be attached to XHR/fetch requests.
+	cleanup, err := page.SetExtraHeaders([]string{"X-Test-User", username})
+	if err != nil {
 		t.Fatalf("set extra headers: %v", err)
 	}
+	t.Cleanup(cleanup)
 
 	return browser, page
 }
