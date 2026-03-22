@@ -1,13 +1,13 @@
 package handlers
 
-import "database/sql"
+import "ato-wfh-diary/internal/db"
 
 // Handler holds shared dependencies for all HTTP handlers.
 type Handler struct {
-	DB *sql.DB
+	Store *db.Store
 }
 
-// New creates a Handler with the given database connection.
-func New(db *sql.DB) *Handler {
-	return &Handler{DB: db}
+// New creates a Handler with the given Store.
+func New(store *db.Store) *Handler {
+	return &Handler{Store: store}
 }
