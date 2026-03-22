@@ -1,0 +1,14 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persist the SQLite database outside the container
+      - ./data:/data
+    environment:
+      - DB_PATH=/data/wfh.db
+      - FORWARD_AUTH_HEADER=X-Forwarded-User
+    restart: unless-stopped
