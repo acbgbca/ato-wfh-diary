@@ -6,9 +6,16 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      # Persist the SQLite database outside the container
-      - ./data:/data
+      # Named volume — Docker initialises ownership from the image on first run,
+      # so the app (UID 1001) can write to /data without any host-side chown.
+      # To use a bind mount instead (e.g. for easy backup access), replace with:
+      #   - ./data:/data
+      # and ensure ./data is writable by UID 1001.
+      - wfh-data:/data
     environment:
       - DB_PATH=/data/wfh.db
       - FORWARD_AUTH_HEADER=X-Forwarded-User
     restart: unless-stopped
+
+volumes:
+  wfh-data:
