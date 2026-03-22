@@ -64,6 +64,20 @@ func (s *Store) GetUserByUsername(ctx context.Context, username string) (*model.
 	return &u, nil
 }
 
+// GetOrCreateUser returns the existing user for username, or creates a new one
+// using displayName if they have never logged in before. Unlike UpsertUser,
+// this does not overwrite the display name of an existing user.
+func (s *Store) GetOrCreateUser(ctx context.Context, username, displayName string) (*model.User, error) {
+	existing, err := s.GetUserByUsername(ctx, username)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return existing, nil
+	}
+	return s.UpsertUser(ctx, username, displayName)
+}
+
 // GetUserByID returns the user with the given ID, or nil if not found.
 func (s *Store) GetUserByID(ctx context.Context, id int64) (*model.User, error) {
 	row := s.db.QueryRowContext(ctx, `

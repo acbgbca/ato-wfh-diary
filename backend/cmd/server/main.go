@@ -1,17 +1,38 @@
 package main
 
 import (
+	"ato-wfh-diary/internal/api/handlers"
+	"ato-wfh-diary/internal/db"
+	"ato-wfh-diary/migrations"
 	"log"
 	"net/http"
+	"os"
 )
 
 func main() {
-	// TODO: load config (port, DB path, forward auth header name)
-	// TODO: initialise database and run migrations
-	// TODO: set up router with API routes and static file serving
+	dbPath := envOr("DB_PATH", "./data/wfh.db")
+	authHeader := envOr("FORWARD_AUTH_HEADER", "X-Forwarded-User")
+	addr := envOr("ADDR", ":8080")
 
-	log.Println("Starting ATO WFH Diary server on :8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatal(err)
+	database, err := db.Open(dbPath, migrations.FS)
+	if err != nil {
+		log.Fatalf("open database: %v", err)
 	}
+	defer database.Close()
+
+	store := db.NewStore(database)
+	handler := handlers.New(store)
+	router := handlers.NewRouter(handler, authHeader)
+
+	log.Printf("ATO WFH Diary listening on %s", addr)
+	if err := http.ListenAndServe(addr, router); err != nil {
+		log.Fatalf("server: %v", err)
+	}
+}
+
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }

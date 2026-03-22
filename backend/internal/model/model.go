@@ -37,6 +37,22 @@ type WorkDayEntry struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
+// IsValid reports whether d is a recognised day type.
+func (d DayType) IsValid() bool {
+	switch d {
+	case DayTypeWFH, DayTypePartWFH, DayTypeOffice,
+		DayTypeAnnualLeave, DayTypeSickLeave,
+		DayTypePublicHoliday, DayTypeWeekend:
+		return true
+	}
+	return false
+}
+
+// IsWFH reports whether d counts toward the ATO WFH claim total.
+func (d DayType) IsWFH() bool {
+	return d == DayTypeWFH || d == DayTypePartWFH
+}
+
 // FinancialYear returns the Australian financial year that contains t.
 // e.g. 15 Aug 2024 → 2025, 3 Mar 2025 → 2025.
 func FinancialYear(t time.Time) int {
