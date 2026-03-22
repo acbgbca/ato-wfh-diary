@@ -26,7 +26,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 
 	store := db.NewStore(database)
 	h := handlers.New(store)
-	router := handlers.NewRouter(h, testAuthHeader)
+	router := handlers.NewRouter(h, testAuthHeader, nil)
 
 	srv := httptest.NewServer(router)
 	t.Cleanup(func() {

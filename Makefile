@@ -51,6 +51,10 @@ test-cover: ## Run tests and show coverage summary
 	cd $(GO_DIR) && go test -coverprofile=../bin/coverage.out ./... \
 		&& go tool cover -func=../bin/coverage.out
 
+.PHONY: test-e2e
+test-e2e: ## Run end-to-end browser tests (requires Chrome/Chromium)
+	cd $(GO_DIR) && go test -tags e2e -v ./e2e/...
+
 # -----------------------------------------------------------------------------
 # Code quality
 # -----------------------------------------------------------------------------

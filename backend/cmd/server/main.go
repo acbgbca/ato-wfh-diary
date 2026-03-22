@@ -1,6 +1,7 @@
 package main
 
 import (
+	"ato-wfh-diary/frontend"
 	"ato-wfh-diary/internal/api/handlers"
 	"ato-wfh-diary/internal/db"
 	"ato-wfh-diary/migrations"
@@ -22,7 +23,7 @@ func main() {
 
 	store := db.NewStore(database)
 	handler := handlers.New(store)
-	router := handlers.NewRouter(handler, authHeader)
+	router := handlers.NewRouter(handler, authHeader, frontend.FS)
 
 	log.Printf("ATO WFH Diary listening on %s", addr)
 	if err := http.ListenAndServe(addr, router); err != nil {

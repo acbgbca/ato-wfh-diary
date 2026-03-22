@@ -50,4 +50,43 @@ Only `wfh` and `part_wfh` entries count toward the ATO WFH claim total.
 ### Export
 
 - Reports can be exported for use in tax preparation
-- Export format: TBD (CSV and/or PDF)
+- **CSV export** is supported: includes a summary header block (user, financial year, total hours) followed by a detail table of all WFH entries
+- PDF export is not currently implemented
+
+## Frontend
+
+The frontend is a single-page vanilla HTML/JavaScript application served by the Go backend (embedded in the binary at build time).
+
+### Styling
+
+- [Pico.css v2](https://picocss.com/) (classless variant, loaded from CDN) provides base styling for all semantic HTML elements
+- A small custom stylesheet (`css/app.css`) handles layout overrides for the entry grid, save bar, and report summary
+
+### Views
+
+#### Diary (default view)
+
+- A **user selector** at the top allows switching between family members
+- A **week navigator** (← Prev / Next →) moves between Monday-anchored weeks; the current week is shown on load
+- A **7-row entry grid** (Mon–Sun) shows day type selector and hours input for each day
+  - Weekend rows are visually de-emphasised
+  - Hours field is enabled only for `wfh` / `part_wfh` day types; automatically disabled and cleared for other types
+- **Save Week** submits all 7 rows to the backend; a brief "Saved" confirmation is shown on success
+
+#### Report
+
+- **Financial year selector** defaults to the most recently completed FY; up to 6 years are available
+- A **summary block** shows the selected user's name, financial year range, and total WFH hours
+- A **detail table** lists every WFH entry (date, type, hours, notes)
+- **Export CSV** downloads the report as a CSV file via the backend export endpoint
+
+### E2E Tests
+
+Browser integration tests are written in Go using [Rod](https://go-rod.github.io/) (Chrome DevTools Protocol, no Node.js required). They require Chrome or Chromium to be installed.
+
+Run with:
+```
+make test-e2e
+```
+
+E2E tests use the `e2e` build tag and are excluded from the standard `make test` run.
