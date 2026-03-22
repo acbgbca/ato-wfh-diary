@@ -26,15 +26,15 @@ type User struct {
 
 // WorkDayEntry records how a single day was spent.
 type WorkDayEntry struct {
-	ID             int64     `json:"id"`
-	UserID         int64     `json:"user_id"`
-	EntryDate      time.Time `json:"entry_date"`
-	FinancialYear  int       `json:"financial_year"`
-	DayType        DayType   `json:"day_type"`
-	Hours          float64   `json:"hours"`
-	Notes          string    `json:"notes,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID            int64     `json:"id"`
+	UserID        int64     `json:"user_id"`
+	EntryDate     time.Time `json:"entry_date"`
+	FinancialYear int       `json:"financial_year"`
+	DayType       DayType   `json:"day_type"`
+	Hours         float64   `json:"hours"`
+	Notes         string    `json:"notes,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // IsValid reports whether d is a recognised day type.

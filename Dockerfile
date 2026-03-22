@@ -11,6 +11,10 @@ RUN go mod download
 # modernc/sqlite is pure Go — CGO_ENABLED=0 is all that is needed.
 COPY backend/ ./
 
+# Copy the top-level frontend source into the location the Go embed expects.
+# This mirrors what `make copy-frontend` does for local builds.
+COPY frontend/ ./frontend/
+
 # VERSION is injected by the build system (e.g. the Git tag v1.2.3).
 # It defaults to "dev" for local docker build invocations without --build-arg.
 ARG VERSION=dev

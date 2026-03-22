@@ -19,3 +19,21 @@ jobs:
 
       - name: Check formatting, vet, and run tests
         run: make check
+
+  e2e:
+    name: E2E tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Install Chromium
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends chromium-browser
+
+      - name: Run E2E tests
+        run: make test-e2e

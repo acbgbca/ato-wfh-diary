@@ -2,9 +2,7 @@ name: CD
 
 on:
   push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'      # e.g. v1.2.3
-      - 'v[0-9]+.[0-9]+.[0-9]+-*'    # e.g. v1.2.3-rc.1 (pre-releases)
+    branches: [main]
 
 jobs:
   build-and-push:
@@ -12,11 +10,28 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
-      packages: write
+      contents: write   # needed to create/force-update the date tag
+      packages: write   # needed to push to GHCR
 
     steps:
       - uses: actions/checkout@v4
+
+      # Compute today's date tag (UTC) and the lowercase image path required by GHCR.
+      - name: Compute date tag
+        id: vars
+        run: |
+          echo "date_tag=$(date -u +%Y.%m.%d)" >> $GITHUB_OUTPUT
+          echo "image=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      # Create the tag locally and force-push it.  If a tag for today already
+      # exists (e.g. a second merge on the same day) it is simply moved forward
+      # to the new commit.
+      - name: Tag commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f ${{ steps.vars.outputs.date_tag }}
+          git push origin -f ${{ steps.vars.outputs.date_tag }}
 
       # QEMU lets Buildx produce linux/arm64 images on the amd64 runner.
       - name: Set up QEMU
@@ -32,31 +47,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # For a stable release tag (v1.2.3) this produces:
-      #   ghcr.io/<owner>/ato-wfh-diary:1.2.3
-      #   ghcr.io/<owner>/ato-wfh-diary:1.2
-      #   ghcr.io/<owner>/ato-wfh-diary:1
-      #   ghcr.io/<owner>/ato-wfh-diary:latest
-      # For a pre-release tag (v1.2.3-rc.1) `latest` is omitted automatically.
-      - name: Extract image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: VERSION=${{ github.ref_name }}
-          # Cache layers in the GitHub Actions cache to speed up subsequent builds.
+          tags: |
+            ${{ steps.vars.outputs.image }}:${{ steps.vars.outputs.date_tag }}
+            ${{ steps.vars.outputs.image }}:latest
+          build-args: VERSION=${{ steps.vars.outputs.date_tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

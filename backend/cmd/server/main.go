@@ -15,10 +15,10 @@ import (
 var version = "dev"
 
 func main() {
-	dbPath     := envOr("DB_PATH", "./data/wfh.db")
+	dbPath := envOr("DB_PATH", "./data/wfh.db")
 	authHeader := envOr("FORWARD_AUTH_HEADER", "X-Forwarded-User")
-	addr       := envOr("ADDR", ":8080")
-	devUser    := os.Getenv("DEV_USER")
+	addr := envOr("ADDR", ":8080")
+	devUser := os.Getenv("DEV_USER")
 
 	database, err := db.Open(dbPath, migrations.FS)
 	if err != nil {
@@ -26,9 +26,9 @@ func main() {
 	}
 	defer database.Close()
 
-	store   := db.NewStore(database)
+	store := db.NewStore(database)
 	handler := handlers.New(store)
-	router  := handlers.NewRouter(handler, authHeader, frontend.FS)
+	router := handlers.NewRouter(handler, authHeader, frontend.FS)
 
 	if devUser != "" {
 		log.Printf("WARNING: DEV_USER=%q — all requests authenticated as that user (development mode only)", devUser)

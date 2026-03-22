@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATO WFH Diary</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <header>
+    <nav>
+      <ul>
+        <li><strong>ATO WFH Diary</strong></li>
+      </ul>
+      <ul>
+        <li><a href="#" id="nav-diary" aria-current="page">Diary</a></li>
+        <li><a href="#" id="nav-report">Report</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <div class="user-bar">
+      <label for="user-select">Viewing:</label>
+      <select id="user-select"></select>
+    </div>
+
+    <!-- Diary view -->
+    <section id="view-diary">
+      <div class="week-nav">
+        <button id="prev-week" class="secondary outline">&#8592; Prev</button>
+        <strong id="week-label"></strong>
+        <button id="next-week" class="secondary outline">Next &#8594;</button>
+      </div>
+      <div class="table-wrapper">
+        <table id="entry-table">
+          <thead>
+            <tr>
+              <th>Day</th>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Hours</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody id="entry-tbody"></tbody>
+        </table>
+      </div>
+      <div class="save-bar">
+        <button id="save-entries">Save Week</button>
+        <span id="save-status" class="save-msg"></span>
+      </div>
+    </section>
+
+    <!-- Report view -->
+    <section id="view-report" hidden>
+      <div class="report-controls">
+        <label for="fy-select">Financial Year ending June:</label>
+        <select id="fy-select"></select>
+      </div>
+      <div id="report-summary"></div>
+      <div class="table-wrapper">
+        <table id="report-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Hours</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody id="report-tbody"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2"><strong>Total WFH Hours</strong></td>
+              <td id="report-total"><strong>&#8212;</strong></td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <button id="export-csv" class="secondary">Export CSV</button>
+    </section>
+  </main>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

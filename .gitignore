@@ -2,3 +2,9 @@ bin/server
 data/wfh.db
 data/wfh.db-shm
 data/wfh.db-wal
+
+# Frontend source lives under frontend/ and is copied here at build time.
+# These are build artifacts — edit the originals under frontend/ instead.
+backend/frontend/index.html
+backend/frontend/css/
+backend/frontend/js/
