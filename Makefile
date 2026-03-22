@@ -4,7 +4,12 @@
 
 BINARY     := bin/server
 GO_DIR     := backend
-BUILD_CMD  := go build -o ../$(BINARY) ./cmd/server
+
+# Resolve the version from the nearest Git tag (e.g. v1.2.3).
+# Falls back to "dev" when there are no tags or no Git repo.
+VERSION    := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+
+BUILD_CMD  := go build -ldflags="-X main.version=$(VERSION)" -o ../$(BINARY) ./cmd/server
 
 .DEFAULT_GOAL := help
 

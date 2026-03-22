@@ -10,6 +10,10 @@ import (
 	"os"
 )
 
+// version is set at build time via -ldflags="-X main.version=<tag>".
+// It defaults to "dev" for local builds without a Git tag.
+var version = "dev"
+
 func main() {
 	dbPath     := envOr("DB_PATH", "./data/wfh.db")
 	authHeader := envOr("FORWARD_AUTH_HEADER", "X-Forwarded-User")
@@ -31,7 +35,7 @@ func main() {
 		router = injectUser(authHeader, devUser, router)
 	}
 
-	log.Printf("ATO WFH Diary listening on %s", addr)
+	log.Printf("ATO WFH Diary %s listening on %s", version, addr)
 	if err := http.ListenAndServe(addr, router); err != nil {
 		log.Fatalf("server: %v", err)
 	}

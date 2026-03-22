@@ -10,8 +10,12 @@ RUN go mod download
 # Copy full backend source and build a fully static binary.
 # modernc/sqlite is pure Go — CGO_ENABLED=0 is all that is needed.
 COPY backend/ ./
+
+# VERSION is injected by the build system (e.g. the Git tag v1.2.3).
+# It defaults to "dev" for local docker build invocations without --build-arg.
+ARG VERSION=dev
 RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w" \
+    -ldflags="-s -w -X main.version=${VERSION}" \
     -o /out/server \
     ./cmd/server
 

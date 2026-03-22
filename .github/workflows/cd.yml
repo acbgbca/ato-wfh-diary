@@ -2,7 +2,9 @@ name: CD
 
 on:
   push:
-    branches: [main]
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'      # e.g. v1.2.3
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'    # e.g. v1.2.3-rc.1 (pre-releases)
 
 jobs:
   build-and-push:
@@ -30,17 +32,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Produces two tags:
+      # For a stable release tag (v1.2.3) this produces:
+      #   ghcr.io/<owner>/ato-wfh-diary:1.2.3
+      #   ghcr.io/<owner>/ato-wfh-diary:1.2
+      #   ghcr.io/<owner>/ato-wfh-diary:1
       #   ghcr.io/<owner>/ato-wfh-diary:latest
-      #   ghcr.io/<owner>/ato-wfh-diary:sha-<short-sha>
+      # For a pre-release tag (v1.2.3-rc.1) `latest` is omitted automatically.
       - name: Extract image metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=raw,value=latest
-            type=sha
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -50,6 +56,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: VERSION=${{ github.ref_name }}
           # Cache layers in the GitHub Actions cache to speed up subsequent builds.
           cache-from: type=gha
           cache-to: type=gha,mode=max
