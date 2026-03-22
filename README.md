@@ -23,17 +23,16 @@ The Australian financial year runs **1 July – 30 June**. At tax time, the appl
 ## Project Structure
 
 ```
-backend/            Go microservice
+backend/            Go microservice (frontend is embedded in the binary at build time)
   cmd/server/       Application entry point
+  frontend/         HTML/CSS/JS source (embedded via go:embed)
   internal/
     api/            HTTP handlers and middleware
     db/             Database access layer
     model/          Domain types
     service/        Business logic
   migrations/       SQL migration files
-frontend/
-  src/              JavaScript source (pages, components, API client)
-  public/           Static assets
+  e2e/              End-to-end browser tests (Rod, build tag: e2e)
 docs/               Project documentation
 ```
 
@@ -50,9 +49,11 @@ docs/               Project documentation
 make test            # Run all tests
 make test-verbose    # Run all tests with per-test output
 make test-cover      # Run tests and show coverage summary
+make test-e2e        # Run end-to-end browser tests (requires Chrome/Chromium)
 make check           # Format, vet, and test (recommended before committing)
 
 make build           # Compile the server binary to bin/server
+make dev             # Build and run in development mode (no auth proxy needed)
 make run             # Build and run the server locally on :8080
 
 make docker-up       # Build and start via Docker Compose
@@ -66,20 +67,30 @@ Run `make` (or `make help`) at any time to see all available targets.
 
 ### Running locally
 
+For manual testing without an auth proxy, use development mode:
+
 ```bash
-make run
+make dev
 ```
 
-The server starts on `http://localhost:8080`. By default it reads the authenticated username from the `X-Forwarded-User` header. When developing without an auth proxy, you can pass the header directly (e.g. with a browser extension or `curl -H "X-Forwarded-User: alice"`).
+This builds and starts the server on `http://localhost:8080` with `DEV_USER=alice`, so every request is automatically authenticated as `alice`. Open the app in a browser and start using it immediately — no header configuration needed.
+
+To run with a real auth proxy (production-like), use `make run` instead. The server then reads the authenticated username from the `X-Forwarded-User` header.
 
 The SQLite database file is created at `./data/wfh.db` on first run.
 
 ### Running tests
 
-Tests run against a real in-memory SQLite instance — no mocks, no external dependencies:
+Unit and integration tests run against a real in-memory SQLite instance — no mocks, no external dependencies:
 
 ```bash
 make test
+```
+
+End-to-end browser tests use [Rod](https://go-rod.github.io/) and require Chrome or Chromium to be installed:
+
+```bash
+make test-e2e
 ```
 
 ## Documentation

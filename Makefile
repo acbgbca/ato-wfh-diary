@@ -34,6 +34,11 @@ build: ## Build the server binary to bin/server
 run: build ## Build and run the server locally
 	DB_PATH=./data/wfh.db FORWARD_AUTH_HEADER=X-Forwarded-User ./$(BINARY)
 
+.PHONY: dev
+dev: build ## Build and run in development mode (no auth proxy needed, user=alice)
+	mkdir -p data
+	DB_PATH=./data/wfh.db DEV_USER=alice ./$(BINARY)
+
 # -----------------------------------------------------------------------------
 # Test
 # -----------------------------------------------------------------------------
