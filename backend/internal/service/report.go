@@ -7,9 +7,9 @@ import (
 
 // ReportSummary is the top-level result of a financial year WFH report.
 type ReportSummary struct {
-	UserID        int64            `json:"user_id"`
-	FinancialYear int              `json:"financial_year"`
-	TotalHours    float64          `json:"total_hours"`
+	UserID        int64                `json:"user_id"`
+	FinancialYear int                  `json:"financial_year"`
+	TotalHours    float64              `json:"total_hours"`
 	Entries       []model.WorkDayEntry `json:"entries"`
 }
 

@@ -23,11 +23,22 @@ help: ## Show available targets
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 # -----------------------------------------------------------------------------
+# Frontend
+# -----------------------------------------------------------------------------
+
+# Copy the frontend source into the location the Go embed directive expects.
+# frontend/ is the source of truth; backend/frontend/{index.html,css,js} are
+# build artifacts (gitignored) and must not be edited directly.
+.PHONY: copy-frontend
+copy-frontend: ## Copy frontend source into backend/frontend for embedding
+	cp -r frontend/. $(GO_DIR)/frontend/
+
+# -----------------------------------------------------------------------------
 # Build
 # -----------------------------------------------------------------------------
 
 .PHONY: build
-build: ## Build the server binary to bin/server
+build: copy-frontend ## Build the server binary to bin/server
 	mkdir -p bin
 	cd $(GO_DIR) && $(BUILD_CMD)
 
@@ -49,20 +60,20 @@ dev: build ## Build and run in development mode (no auth proxy needed, user=alic
 # -----------------------------------------------------------------------------
 
 .PHONY: test
-test: ## Run all tests
+test: copy-frontend ## Run all tests
 	cd $(GO_DIR) && go test ./...
 
 .PHONY: test-verbose
-test-verbose: ## Run all tests with verbose output
+test-verbose: copy-frontend ## Run all tests with verbose output
 	cd $(GO_DIR) && go test -v ./...
 
 .PHONY: test-cover
-test-cover: ## Run tests and show coverage summary
+test-cover: copy-frontend ## Run tests and show coverage summary
 	cd $(GO_DIR) && go test -coverprofile=../bin/coverage.out ./... \
 		&& go tool cover -func=../bin/coverage.out
 
 .PHONY: test-e2e
-test-e2e: ## Run end-to-end browser tests (requires Chrome/Chromium)
+test-e2e: copy-frontend ## Run end-to-end browser tests (requires Chrome/Chromium)
 	cd $(GO_DIR) && go test -tags e2e -v ./e2e/...
 
 # -----------------------------------------------------------------------------
@@ -74,7 +85,7 @@ fmt: ## Format all Go source files
 	cd $(GO_DIR) && gofmt -w .
 
 .PHONY: vet
-vet: ## Run go vet
+vet: copy-frontend ## Run go vet
 	cd $(GO_DIR) && go vet ./...
 
 .PHONY: check
@@ -103,3 +114,4 @@ docker-logs: ## Tail logs from the running container
 .PHONY: clean
 clean: ## Remove build artifacts
 	rm -rf bin/
+	rm -rf $(GO_DIR)/frontend/index.html $(GO_DIR)/frontend/css $(GO_DIR)/frontend/js

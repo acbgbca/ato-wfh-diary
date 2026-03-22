@@ -26,10 +26,10 @@ func newE2EServer(t *testing.T) *httptest.Server {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	store  := db.NewStore(database)
-	h      := handlers.New(store)
+	store := db.NewStore(database)
+	h := handlers.New(store)
 	router := handlers.NewRouter(h, "X-Test-User", frontend.FS)
-	srv    := httptest.NewServer(router)
+	srv := httptest.NewServer(router)
 	t.Cleanup(func() {
 		srv.Close()
 		database.Close()
