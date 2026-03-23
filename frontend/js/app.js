@@ -276,7 +276,11 @@ function clearStatus() {
 
 // ── Settings ───────────────────────────────────────────────────────────────
 function loadSettings() {
-  if (!userProfile) return;
+  if (!userProfile) {
+    document.getElementById('profile-sat-type').value = 'weekend';
+    document.getElementById('profile-sun-type').value = 'weekend';
+    return;
+  }
   document.getElementById('profile-default-hours').value = userProfile.default_hours;
   WEEK_DAYS.forEach(({ key }) => {
     const el = document.getElementById(`profile-${key.replace('_type', '-type')}`);
