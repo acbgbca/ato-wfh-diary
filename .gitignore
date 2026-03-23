@@ -8,3 +8,6 @@ data/wfh.db-wal
 backend/frontend/index.html
 backend/frontend/css/
 backend/frontend/js/
+backend/frontend/manifest.json
+backend/frontend/sw.js
+backend/frontend/icons/
