@@ -114,4 +114,5 @@ docker-logs: ## Tail logs from the running container
 .PHONY: clean
 clean: ## Remove build artifacts
 	rm -rf bin/
-	rm -rf $(GO_DIR)/frontend/index.html $(GO_DIR)/frontend/css $(GO_DIR)/frontend/js
+	rm -rf $(GO_DIR)/frontend/index.html $(GO_DIR)/frontend/css $(GO_DIR)/frontend/js \
+		$(GO_DIR)/frontend/manifest.json $(GO_DIR)/frontend/sw.js $(GO_DIR)/frontend/icons

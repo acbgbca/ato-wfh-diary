@@ -5,6 +5,9 @@ data/wfh.db-wal
 
 # Frontend source lives under frontend/ and is copied here at build time.
 # These are build artifacts — edit the originals under frontend/ instead.
-backend/frontend/index.html
+backend/frontend/*.html
+backend/frontend/*.json
+backend/frontend/*.js
 backend/frontend/css/
 backend/frontend/js/
+backend/frontend/icons/

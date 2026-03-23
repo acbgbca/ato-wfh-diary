@@ -86,7 +86,7 @@ func TestE2E_PageLoads(t *testing.T) {
 
 	// Diary view must be present and report view hidden.
 	page.MustElement("#entry-tbody")
-	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr').length === 7`)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
 
 	reportSection := page.MustElement("#view-report")
 	visible, err := reportSection.Visible()
@@ -106,7 +106,7 @@ func TestE2E_SaveAndReloadEntry(t *testing.T) {
 	page.MustNavigate(srv.URL)
 
 	// Wait for the week rows to render.
-	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr').length === 7`)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
 
 	// Set Monday (first row) to WFH with 7.5 hours.
 	firstRow := page.MustElement("#entry-tbody tr:first-child")
@@ -119,7 +119,7 @@ func TestE2E_SaveAndReloadEntry(t *testing.T) {
 
 	// Reload and verify data persisted.
 	page.MustReload()
-	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr').length === 7`)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
 
 	// Allow the async getEntries call to complete and populate the inputs.
 	time.Sleep(500 * time.Millisecond)
@@ -144,7 +144,7 @@ func TestE2E_ReportShowsTotals(t *testing.T) {
 	_, page := newPage(t, "alice")
 	page.MustNavigate(srv.URL)
 
-	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr').length === 7`)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
 
 	// Enter an 8-hour WFH day.
 	firstRow := page.MustElement("#entry-tbody tr:first-child")
@@ -179,7 +179,7 @@ func TestE2E_WeekNavigation(t *testing.T) {
 	_, page := newPage(t, "alice")
 	page.MustNavigate(srv.URL)
 
-	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr').length === 7`)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
 
 	initial := page.MustElement("#week-label").MustText()
 
