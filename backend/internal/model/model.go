@@ -53,6 +53,23 @@ func (d DayType) IsWFH() bool {
 	return d == DayTypeWFH || d == DayTypePartWFH
 }
 
+// UserProfile stores a user's default WFH settings used to pre-populate
+// empty weeks in the diary.
+type UserProfile struct {
+	ID           int64     `json:"id"`
+	UserID       int64     `json:"user_id"`
+	DefaultHours float64   `json:"default_hours"`
+	MonType      DayType   `json:"mon_type"`
+	TueType      DayType   `json:"tue_type"`
+	WedType      DayType   `json:"wed_type"`
+	ThuType      DayType   `json:"thu_type"`
+	FriType      DayType   `json:"fri_type"`
+	SatType      DayType   `json:"sat_type"`
+	SunType      DayType   `json:"sun_type"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
 // FinancialYear returns the Australian financial year that contains t.
 // e.g. 15 Aug 2024 → 2025, 3 Mar 2025 → 2025.
 func FinancialYear(t time.Time) int {

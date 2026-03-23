@@ -20,6 +20,7 @@
       <ul>
         <li><a href="#" id="nav-diary" aria-current="page">Diary</a></li>
         <li><a href="#" id="nav-report">Report</a></li>
+        <li><a href="#" id="nav-settings">Settings</a></li>
       </ul>
     </nav>
   </header>
@@ -86,6 +87,36 @@
         </table>
       </div>
       <button id="export-csv" class="secondary">Export CSV</button>
+    </section>
+
+    <!-- Settings view -->
+    <section id="view-settings" hidden>
+      <h2>Settings</h2>
+      <h3>Default WFH Hours</h3>
+      <p>Hours automatically applied to WFH days when pre-populating an empty week.</p>
+      <label for="profile-default-hours">Default hours per WFH day</label>
+      <input type="number" id="profile-default-hours" min="0.01" max="24" step="any" style="max-width:8rem">
+
+      <h3>Standard Week</h3>
+      <p>Default day type for each day of the week, applied when opening a week with no entries.</p>
+      <table id="profile-week-table">
+        <thead>
+          <tr><th>Day</th><th>Default Type</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Monday</td>   <td><select id="profile-mon-type" class="profile-day-select"></select></td></tr>
+          <tr><td>Tuesday</td>  <td><select id="profile-tue-type" class="profile-day-select"></select></td></tr>
+          <tr><td>Wednesday</td><td><select id="profile-wed-type" class="profile-day-select"></select></td></tr>
+          <tr><td>Thursday</td> <td><select id="profile-thu-type" class="profile-day-select"></select></td></tr>
+          <tr><td>Friday</td>   <td><select id="profile-fri-type" class="profile-day-select"></select></td></tr>
+          <tr><td>Saturday</td> <td><select id="profile-sat-type" class="profile-day-select"></select></td></tr>
+          <tr><td>Sunday</td>   <td><select id="profile-sun-type" class="profile-day-select"></select></td></tr>
+        </tbody>
+      </table>
+      <div class="save-bar">
+        <button id="save-profile">Save Settings</button>
+        <span id="profile-status" class="save-msg"></span>
+      </div>
     </section>
   </main>
 

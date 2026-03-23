@@ -29,6 +29,23 @@ const api = {
     }
   },
 
+  getProfile() {
+    return fetchJSON('/api/me/profile');
+  },
+
+  async saveProfile(data) {
+    const r = await fetch('/api/me/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+  },
+
   getReport(userId, fy) {
     return fetchJSON(`/api/users/${userId}/report?financial_year=${fy}`);
   },

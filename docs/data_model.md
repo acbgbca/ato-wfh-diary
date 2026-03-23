@@ -58,6 +58,27 @@ One row per user per calendar date. Captures the type of day and the number of h
 
 ---
 
+### `user_profiles`
+
+Optional per-user settings that provide default values when pre-populating an empty week in the diary. A user who has never saved their profile simply gets the hard-coded defaults (office for Mon–Fri, weekend for Sat–Sun).
+
+| Column         | Type         | Constraints                                   | Description                                      |
+|----------------|--------------|-----------------------------------------------|--------------------------------------------------|
+| `id`           | INTEGER      | PK, AUTOINCREMENT                             | Internal identifier                              |
+| `user_id`      | INTEGER      | NOT NULL, UNIQUE, FK → `users.id`             | One profile per user                             |
+| `default_hours`| DECIMAL(4,2) | NOT NULL, CHECK > 0 AND ≤ 24                  | Hours pre-filled for `wfh` days                 |
+| `mon_type`     | TEXT         | NOT NULL, `day_type` enum                     | Default day type for Monday                      |
+| `tue_type`     | TEXT         | NOT NULL, `day_type` enum                     | Default day type for Tuesday                     |
+| `wed_type`     | TEXT         | NOT NULL, `day_type` enum                     | Default day type for Wednesday                   |
+| `thu_type`     | TEXT         | NOT NULL, `day_type` enum                     | Default day type for Thursday                    |
+| `fri_type`     | TEXT         | NOT NULL, `day_type` enum                     | Default day type for Friday                      |
+| `sat_type`     | TEXT         | NOT NULL, `day_type` enum                     | Default day type for Saturday                    |
+| `sun_type`     | TEXT         | NOT NULL, `day_type` enum                     | Default day type for Sunday                      |
+| `created_at`   | TIMESTAMP    | NOT NULL, DEFAULT NOW                         | Record creation time                             |
+| `updated_at`   | TIMESTAMP    | NOT NULL, DEFAULT NOW                         | Last update time                                 |
+
+---
+
 ## SQL Schema
 
 ```sql
@@ -94,6 +115,29 @@ CREATE INDEX idx_wde_user_date ON work_day_entries(user_id, entry_date);
 
 -- Supports report generation: fetch all entries for a user in a given financial year
 CREATE INDEX idx_wde_user_fy ON work_day_entries(user_id, financial_year);
+
+CREATE TABLE user_profiles (
+    id            INTEGER      PRIMARY KEY AUTOINCREMENT,
+    user_id       INTEGER      NOT NULL UNIQUE REFERENCES users(id),
+    default_hours DECIMAL(4,2) NOT NULL
+                               CHECK(default_hours > 0.00 AND default_hours <= 24.00),
+    mon_type      TEXT         NOT NULL
+                               CHECK(mon_type IN ('wfh', 'part_wfh', 'office', 'annual_leave', 'sick_leave', 'public_holiday', 'weekend')),
+    tue_type      TEXT         NOT NULL
+                               CHECK(tue_type IN ('wfh', 'part_wfh', 'office', 'annual_leave', 'sick_leave', 'public_holiday', 'weekend')),
+    wed_type      TEXT         NOT NULL
+                               CHECK(wed_type IN ('wfh', 'part_wfh', 'office', 'annual_leave', 'sick_leave', 'public_holiday', 'weekend')),
+    thu_type      TEXT         NOT NULL
+                               CHECK(thu_type IN ('wfh', 'part_wfh', 'office', 'annual_leave', 'sick_leave', 'public_holiday', 'weekend')),
+    fri_type      TEXT         NOT NULL
+                               CHECK(fri_type IN ('wfh', 'part_wfh', 'office', 'annual_leave', 'sick_leave', 'public_holiday', 'weekend')),
+    sat_type      TEXT         NOT NULL
+                               CHECK(sat_type IN ('wfh', 'part_wfh', 'office', 'annual_leave', 'sick_leave', 'public_holiday', 'weekend')),
+    sun_type      TEXT         NOT NULL
+                               CHECK(sun_type IN ('wfh', 'part_wfh', 'office', 'annual_leave', 'sick_leave', 'public_holiday', 'weekend')),
+    created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 ```
 
 ---
