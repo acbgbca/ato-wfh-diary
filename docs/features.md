@@ -62,6 +62,26 @@ The frontend is a single-page vanilla HTML/JavaScript application served by the 
 - [Pico.css v2](https://picocss.com/) (classless variant, loaded from CDN) provides base styling for all semantic HTML elements
 - A small custom stylesheet (`css/app.css`) handles layout overrides for the entry grid, save bar, and report summary
 
+### Responsive Layout
+
+The UI adapts to screen size:
+
+- **Desktop (≥600px):** standard 5-column table (Day, Date, Type, Hours, Notes) with notes inline
+- **Mobile (<600px):** each day is displayed as a 2-row compact layout:
+  - Top row: day name and date
+  - Bottom row: day type selector and hours input
+  - Notes are hidden by default; a **Notes** toggle button expands a notes input below each day
+
+### Progressive Web App (PWA)
+
+The application is installable as a PWA on supported browsers and devices:
+
+- `manifest.json` declares app name, display mode (`standalone`), theme colour, and icon
+- `sw.js` is a minimal service worker that caches the app shell (HTML, CSS, JS, manifest, icon) for fast subsequent loads; all `/api/` requests always go to the network
+- An SVG app icon is provided at `icons/icon.svg`
+- On iOS, the `apple-touch-icon` link enables "Add to Home Screen" support
+- The browser's native install prompt is relied upon (no custom install UI)
+
 ### Views
 
 #### Diary (default view)

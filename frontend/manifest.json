@@ -1,0 +1,17 @@
+{
+  "name": "ATO WFH Diary",
+  "short_name": "WFH Diary",
+  "description": "Track work-from-home hours for Australian tax purposes",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1095c1",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

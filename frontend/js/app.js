@@ -139,37 +139,72 @@ async function loadWeek() {
     const entry   = byDate[dateStr];
     const defType = i >= 5 ? 'weekend' : 'office';
     const dtype   = entry?.day_type ?? defType;
+    const notes   = entry?.notes ?? '';
 
     const typeOpts = DAY_TYPES
       .map(dt => `<option value="${dt.value}"${dtype === dt.value ? ' selected' : ''}>${dt.label}</option>`)
       .join('');
 
+    // Main row: Day | Date | Type | Hours | (desktop: notes input; mobile: notes toggle)
     const tr = document.createElement('tr');
-    if (i >= 5) tr.className = 'weekend-row';
+    tr.className = 'day-row' + (i >= 5 ? ' weekend-row' : '');
+    tr.dataset.date = dateStr;
     tr.innerHTML = `
       <td>${label}</td>
       <td>${dateStr}</td>
       <td><select class="day-type-select">${typeOpts}</select></td>
       <td><input type="number" class="hours-input" min="0.01" max="24" step="any"${isWFH(dtype) ? '' : ' disabled'}></td>
-      <td><input type="text" class="notes-input" placeholder="Notes"></td>
+      <td class="cell-notes"><input type="text" class="notes-input" placeholder="Notes"></td>
     `;
 
     if (isWFH(dtype) && entry?.hours) tr.querySelector('.hours-input').value = entry.hours;
-    tr.querySelector('.notes-input').value = entry?.notes ?? '';
+    tr.querySelector('.notes-input').value = notes;
+
+    // Notes expand row (mobile only — hidden by default, toggled per day)
+    const notesRow = document.createElement('tr');
+    notesRow.className = 'day-notes-row';
+    notesRow.hidden = true;
+    notesRow.innerHTML = `<td colspan="5"><input type="text" class="notes-input notes-mobile" placeholder="Notes"></td>`;
+    notesRow.querySelector('.notes-mobile').value = notes;
+
+    // Notes toggle button — injected into the 5th cell on mobile (CSS reveals it)
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = 'notes-toggle';
+    toggleBtn.textContent = notes ? 'Notes \u2022' : 'Notes';
+    toggleBtn.setAttribute('aria-label', 'Toggle notes');
+    toggleBtn.addEventListener('click', () => {
+      notesRow.hidden = !notesRow.hidden;
+    });
+
+    // Wrap toggle in its own cell so CSS grid-area works
+    const toggleCell = document.createElement('td');
+    toggleCell.className = 'notes-toggle-cell';
+    toggleCell.appendChild(toggleBtn);
+    tr.appendChild(toggleCell);
 
     tbody.appendChild(tr);
+    tbody.appendChild(notesRow);
   });
 
   clearStatus();
 }
 
 async function saveWeek() {
-  const entries = [...document.querySelectorAll('#entry-tbody tr')].map(tr => {
-    const dtype  = tr.querySelector('.day-type-select').value;
-    const hVal   = tr.querySelector('.hours-input').value;
-    const notes  = tr.querySelector('.notes-input').value.trim();
-    const entry  = {
-      entry_date: tr.querySelector('td:nth-child(2)').textContent,
+  const entries = [...document.querySelectorAll('#entry-tbody tr.day-row')].map(tr => {
+    const dtype = tr.querySelector('.day-type-select').value;
+    const hVal  = tr.querySelector('.hours-input').value;
+
+    // On mobile the notes-expand row holds the live input; on desktop use the inline cell.
+    const isMobile     = window.innerWidth < 600;
+    const notesRow     = tr.nextElementSibling; // always the .day-notes-row
+    const notesInput   = isMobile
+      ? notesRow?.querySelector('.notes-mobile')
+      : tr.querySelector('.cell-notes .notes-input');
+    const notes = notesInput?.value.trim() ?? '';
+
+    const entry = {
+      entry_date: tr.dataset.date,
       day_type:   dtype,
       hours:      isWFH(dtype) ? (parseFloat(hVal) || 0) : 0,
     };
@@ -229,3 +264,7 @@ async function loadReport() {
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', init);
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+}
