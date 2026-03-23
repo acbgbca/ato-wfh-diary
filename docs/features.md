@@ -36,6 +36,30 @@
 
 Only `wfh` and `part_wfh` entries count toward the ATO WFH claim total.
 
+## User Profile and Defaults
+
+Each user can optionally configure a profile via the **Settings** page. The profile provides default values that are applied when opening a week that has no existing entries.
+
+### Profile Settings
+
+| Setting | Description |
+|---------|-------------|
+| **Default WFH hours** | Number of hours pre-filled for `wfh` days when a week is empty |
+| **Standard week** | A default `day_type` for each day of the week (Mon–Sun) |
+
+### Default Application Rules
+
+- Defaults are applied **only when a week has no existing entries** — saved weeks are never overwritten
+- For days defaulted to `wfh`, the hours field is pre-filled with `default_hours`
+- For days defaulted to `part_wfh`, no hours are pre-filled (the user must enter hours manually)
+- For all other day types, the hours field remains empty/zero
+- If a user has not configured a profile, the existing behaviour applies: Mon–Fri defaults to `office`, Sat–Sun defaults to `weekend`
+
+### API
+
+- `GET /api/me/profile` — returns the current user's profile; 404 if not configured
+- `PUT /api/me/profile` — creates or updates the current user's profile
+
 ## Financial Year Reporting
 
 - Users can generate a report for any financial year (Australian FY: **1 July – 30 June**)
@@ -92,6 +116,14 @@ The application is installable as a PWA on supported browsers and devices:
   - Weekend rows are visually de-emphasised
   - Hours field is enabled only for `wfh` / `part_wfh` day types; automatically disabled and cleared for other types
 - **Save Week** submits all 7 rows to the backend; a brief "Saved" confirmation is shown on success
+
+#### Settings
+
+- Accessible via the **Settings** nav link
+- **Default WFH hours** input: number of hours pre-applied to `wfh` days on blank weeks
+- **Standard week table**: day type selector for each day of the week (Mon–Sun)
+- **Save Settings** persists the profile; a brief "Saved" confirmation is shown on success
+- On load, the form is populated with the user's current profile (if one exists)
 
 #### Report
 

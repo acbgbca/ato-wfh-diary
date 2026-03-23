@@ -172,6 +172,96 @@ func TestE2E_ReportShowsTotals(t *testing.T) {
 	}
 }
 
+// TestE2E_Settings_SaveAndReload saves a user profile via the Settings page
+// and verifies it persists after reload.
+func TestE2E_Settings_SaveAndReload(t *testing.T) {
+	srv := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(srv.URL)
+
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Navigate to Settings.
+	page.MustElement("#nav-settings").MustClick()
+	waitFor(t, page, `() => !document.getElementById('view-settings').hidden`)
+
+	// Set default hours to 7.5 and Wednesday to office.
+	page.MustElement("#profile-default-hours").MustInput("7.5")
+	page.MustElement("#profile-wed-type").MustSelect("Office")
+
+	// Save.
+	page.MustElement("#save-profile").MustClick()
+	waitFor(t, page, `() => document.getElementById('profile-status').textContent === 'Saved'`)
+
+	// Reload and navigate back to Settings.
+	page.MustReload()
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+	time.Sleep(500 * time.Millisecond)
+
+	page.MustElement("#nav-settings").MustClick()
+	waitFor(t, page, `() => !document.getElementById('view-settings').hidden`)
+	time.Sleep(500 * time.Millisecond)
+
+	hours := page.MustElement("#profile-default-hours").MustProperty("value").Str()
+	if hours != "7.5" {
+		t.Errorf("default_hours after reload: got %q, want 7.5", hours)
+	}
+
+	wedType := page.MustElement("#profile-wed-type").MustProperty("value").Str()
+	if wedType != "office" {
+		t.Errorf("wed_type after reload: got %q, want office", wedType)
+	}
+}
+
+// TestE2E_WeekDefaults_FromProfile verifies that navigating to an empty week
+// pre-populates entries from the user's profile.
+func TestE2E_WeekDefaults_FromProfile(t *testing.T) {
+	srv := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(srv.URL)
+
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Set up profile: Wednesday = office, default hours = 6.
+	page.MustElement("#nav-settings").MustClick()
+	waitFor(t, page, `() => !document.getElementById('view-settings').hidden`)
+
+	page.MustElement("#profile-default-hours").MustInput("6")
+	page.MustElement("#profile-wed-type").MustSelect("Office")
+	page.MustElement("#save-profile").MustClick()
+	waitFor(t, page, `() => document.getElementById('profile-status').textContent === 'Saved'`)
+
+	// Navigate back to diary — this week is empty, should apply profile defaults.
+	page.MustElement("#nav-diary").MustClick()
+	waitFor(t, page, `() => !document.getElementById('view-diary').hidden`)
+	time.Sleep(500 * time.Millisecond)
+
+	rows := page.MustElements("#entry-tbody tr.day-row")
+	if len(rows) != 7 {
+		t.Fatalf("expected 7 rows, got %d", len(rows))
+	}
+
+	// Monday (index 0) should be WFH with hours=6.
+	monType := rows[0].MustElement(".day-type-select").MustProperty("value").Str()
+	if monType != "wfh" {
+		t.Errorf("monday type: got %q, want wfh", monType)
+	}
+	monHours := rows[0].MustElement(".hours-input").MustProperty("value").Str()
+	if monHours != "6" {
+		t.Errorf("monday hours: got %q, want 6", monHours)
+	}
+
+	// Wednesday (index 2) should be office with no hours.
+	wedType := rows[2].MustElement(".day-type-select").MustProperty("value").Str()
+	if wedType != "office" {
+		t.Errorf("wednesday type: got %q, want office", wedType)
+	}
+	wedHours := rows[2].MustElement(".hours-input").MustProperty("value").Str()
+	if wedHours != "" {
+		t.Errorf("wednesday hours: got %q, want empty", wedHours)
+	}
+}
+
 // TestE2E_WeekNavigation verifies that Prev/Next week buttons update the
 // week label and reload entries.
 func TestE2E_WeekNavigation(t *testing.T) {

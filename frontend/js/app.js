@@ -50,8 +50,19 @@ function escapeHTML(s) {
 
 const on = (id, evt, fn) => document.getElementById(id).addEventListener(evt, fn);
 
+// Day keys in Mon–Sun order, matching the profile field names and HTML select IDs.
+const WEEK_DAYS = [
+  { label: 'Mon', key: 'mon_type' },
+  { label: 'Tue', key: 'tue_type' },
+  { label: 'Wed', key: 'wed_type' },
+  { label: 'Thu', key: 'thu_type' },
+  { label: 'Fri', key: 'fri_type' },
+  { label: 'Sat', key: 'sat_type' },
+  { label: 'Sun', key: 'sun_type' },
+];
+
 // ── App state ──────────────────────────────────────────────────────────────
-let me, allUsers, selectedUserId, weekStart, view, reportFY;
+let me, allUsers, selectedUserId, weekStart, view, reportFY, userProfile;
 
 // ── Initialisation ─────────────────────────────────────────────────────────
 async function init() {
@@ -62,8 +73,12 @@ async function init() {
     view = 'diary';
     reportFY = defaultFY();
 
+    // Load profile in the background; a missing profile (404) is fine.
+    userProfile = await api.getProfile().catch(() => null);
+
     populateUserSelect();
     populateFYSelect();
+    populateProfileSelects();
     bindEvents();
     showView('diary');
   } catch (e) {
@@ -78,6 +93,17 @@ function populateUserSelect() {
     .join('');
 }
 
+function populateProfileSelects() {
+  const typeOpts = DAY_TYPES
+    .map(dt => `<option value="${dt.value}">${dt.label}</option>`)
+    .join('');
+
+  WEEK_DAYS.forEach(({ key }) => {
+    const el = document.getElementById(`profile-${key.replace('_type', '-type')}`);
+    if (el) el.innerHTML = typeOpts;
+  });
+}
+
 function populateFYSelect() {
   const fy = currentFY();
   let html = '';
@@ -88,8 +114,9 @@ function populateFYSelect() {
 }
 
 function bindEvents() {
-  on('nav-diary',  'click', e => { e.preventDefault(); showView('diary');  });
-  on('nav-report', 'click', e => { e.preventDefault(); showView('report'); });
+  on('nav-diary',    'click', e => { e.preventDefault(); showView('diary');    });
+  on('nav-report',   'click', e => { e.preventDefault(); showView('report');   });
+  on('nav-settings', 'click', e => { e.preventDefault(); showView('settings'); });
 
   on('user-select', 'change', e => {
     selectedUserId = parseInt(e.target.value, 10);
@@ -100,8 +127,9 @@ function bindEvents() {
   on('next-week',    'click', () => { weekStart = addDays(weekStart,  7); loadWeek(); });
   on('save-entries', 'click', saveWeek);
 
-  on('fy-select',  'change', e => { reportFY = parseInt(e.target.value, 10); loadReport(); });
-  on('export-csv', 'click',  () => { window.location.href = api.exportURL(selectedUserId, reportFY); });
+  on('fy-select',   'change', e => { reportFY = parseInt(e.target.value, 10); loadReport(); });
+  on('export-csv',  'click',  () => { window.location.href = api.exportURL(selectedUserId, reportFY); });
+  on('save-profile', 'click', saveProfile);
 
   // Toggle hours field when day type changes
   document.getElementById('entry-tbody').addEventListener('change', e => {
@@ -115,11 +143,15 @@ function bindEvents() {
 // ── Views ──────────────────────────────────────────────────────────────────
 function showView(v) {
   view = v;
-  document.getElementById('view-diary').hidden  = v !== 'diary';
-  document.getElementById('view-report').hidden = v !== 'report';
-  document.getElementById('nav-diary').setAttribute('aria-current',  v === 'diary'  ? 'page' : 'false');
-  document.getElementById('nav-report').setAttribute('aria-current', v === 'report' ? 'page' : 'false');
-  v === 'diary' ? loadWeek() : loadReport();
+  document.getElementById('view-diary').hidden    = v !== 'diary';
+  document.getElementById('view-report').hidden   = v !== 'report';
+  document.getElementById('view-settings').hidden = v !== 'settings';
+  document.getElementById('nav-diary').setAttribute('aria-current',    v === 'diary'    ? 'page' : 'false');
+  document.getElementById('nav-report').setAttribute('aria-current',   v === 'report'   ? 'page' : 'false');
+  document.getElementById('nav-settings').setAttribute('aria-current', v === 'settings' ? 'page' : 'false');
+  if (v === 'diary')    loadWeek();
+  if (v === 'report')   loadReport();
+  if (v === 'settings') loadSettings();
 }
 
 // ── Diary ──────────────────────────────────────────────────────────────────
@@ -134,11 +166,14 @@ async function loadWeek() {
   const tbody = document.getElementById('entry-tbody');
   tbody.innerHTML = '';
 
-  ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach((label, i) => {
-    const dateStr = formatDate(addDays(weekStart, i));
-    const entry   = byDate[dateStr];
-    const defType = i >= 5 ? 'weekend' : 'office';
-    const dtype   = entry?.day_type ?? defType;
+  const weekIsEmpty = entries.length === 0;
+
+  WEEK_DAYS.forEach(({ label, key }, i) => {
+    const dateStr   = formatDate(addDays(weekStart, i));
+    const entry     = byDate[dateStr];
+    const hardDefault = i >= 5 ? 'weekend' : 'office';
+    const profileDefault = weekIsEmpty && userProfile ? userProfile[key] : null;
+    const dtype   = entry?.day_type ?? profileDefault ?? hardDefault;
     const notes   = entry?.notes ?? '';
 
     const typeOpts = DAY_TYPES
@@ -157,7 +192,13 @@ async function loadWeek() {
       <td class="cell-notes"><input type="text" class="notes-input" placeholder="Notes"></td>
     `;
 
-    if (isWFH(dtype) && entry?.hours) tr.querySelector('.hours-input').value = entry.hours;
+    if (isWFH(dtype)) {
+      if (entry?.hours) {
+        tr.querySelector('.hours-input').value = entry.hours;
+      } else if (weekIsEmpty && userProfile && dtype === 'wfh') {
+        tr.querySelector('.hours-input').value = userProfile.default_hours;
+      }
+    }
     tr.querySelector('.notes-input').value = notes;
 
     // Notes expand row (mobile only — hidden by default, toggled per day)
@@ -229,6 +270,54 @@ function setStatus(msg, isError) {
 
 function clearStatus() {
   const el = document.getElementById('save-status');
+  el.textContent = '';
+  el.className = 'save-msg';
+}
+
+// ── Settings ───────────────────────────────────────────────────────────────
+function loadSettings() {
+  if (!userProfile) {
+    document.getElementById('profile-sat-type').value = 'weekend';
+    document.getElementById('profile-sun-type').value = 'weekend';
+    return;
+  }
+  document.getElementById('profile-default-hours').value = userProfile.default_hours;
+  WEEK_DAYS.forEach(({ key }) => {
+    const el = document.getElementById(`profile-${key.replace('_type', '-type')}`);
+    if (el) el.value = userProfile[key];
+  });
+}
+
+async function saveProfile() {
+  const hoursVal = parseFloat(document.getElementById('profile-default-hours').value);
+  if (!hoursVal || hoursVal <= 0 || hoursVal > 24) {
+    setProfileStatus('Default hours must be between 0 and 24', true);
+    return;
+  }
+
+  const data = { default_hours: hoursVal };
+  WEEK_DAYS.forEach(({ key }) => {
+    const el = document.getElementById(`profile-${key.replace('_type', '-type')}`);
+    data[key] = el ? el.value : 'office';
+  });
+
+  try {
+    userProfile = await api.saveProfile(data);
+    setProfileStatus('Saved', false);
+    setTimeout(clearProfileStatus, 3000);
+  } catch (e) {
+    setProfileStatus(e.message, true);
+  }
+}
+
+function setProfileStatus(msg, isError) {
+  const el = document.getElementById('profile-status');
+  el.textContent = msg;
+  el.className = 'save-msg ' + (isError ? 'error' : 'success');
+}
+
+function clearProfileStatus() {
+  const el = document.getElementById('profile-status');
   el.textContent = '';
   el.className = 'save-msg';
 }
