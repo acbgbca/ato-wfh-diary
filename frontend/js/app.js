@@ -166,7 +166,11 @@ function bindEvents() {
     if (!e.target.matches('.day-type-select')) return;
     const hoursEl = e.target.closest('tr').querySelector('.hours-input');
     hoursEl.disabled = !isWFH(e.target.value);
-    if (hoursEl.disabled) hoursEl.value = '';
+    if (hoursEl.disabled) {
+      hoursEl.value = '';
+    } else if (e.target.value === 'wfh' && userProfile?.default_hours) {
+      hoursEl.value = userProfile.default_hours;
+    }
   });
 }
 
