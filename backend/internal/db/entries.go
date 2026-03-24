@@ -111,6 +111,79 @@ func (s *Store) GetFYAllEntries(ctx context.Context, userID int64, financialYear
 	return scanEntries(rows)
 }
 
+// GetFirstIncompleteWeek returns the Monday of the first week, starting from
+// fromDate, that does not have entries for every day that falls within the
+// given financial year. It only checks weeks up to and including the week
+// that contains today. Returns nil if all such weeks are complete.
+//
+// For the first week of a financial year the week may straddle the FY
+// boundary (e.g. the week of Mon 30 Jun when FY starts on Tue 1 Jul).
+// In that case only the days on or after 1 July are required.
+func (s *Store) GetFirstIncompleteWeek(ctx context.Context, userID int64, financialYear int, fromDate time.Time, today time.Time) (*time.Time, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT date(entry_date) FROM work_day_entries
+		WHERE  user_id = ? AND financial_year = ?
+		ORDER  BY entry_date
+	`, userID, financialYear)
+	if err != nil {
+		return nil, fmt.Errorf("get fy entry dates: %w", err)
+	}
+	defer rows.Close()
+
+	entryDates := make(map[string]bool)
+	for rows.Next() {
+		var dateStr string
+		if err := rows.Scan(&dateStr); err != nil {
+			return nil, fmt.Errorf("scan entry date: %w", err)
+		}
+		entryDates[dateStr] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// fyStart is the first day of this financial year (e.g. 1 Jul 2025 for FY2026).
+	fyStart := time.Date(financialYear-1, time.July, 1, 0, 0, 0, 0, time.UTC)
+	todayMonday := mondayOf(today)
+
+	week := fromDate
+	for !week.After(todayMonday) {
+		weekEnd := week.AddDate(0, 0, 6)
+
+		// For the first (possibly partial) week, only count days within the FY.
+		firstDay := week
+		if firstDay.Before(fyStart) {
+			firstDay = fyStart
+		}
+		required := int(weekEnd.Sub(firstDay).Hours()/24) + 1
+
+		count := 0
+		for i := 0; i < 7; i++ {
+			d := week.AddDate(0, 0, i)
+			if !d.Before(firstDay) && entryDates[d.Format("2006-01-02")] {
+				count++
+			}
+		}
+		if count < required {
+			result := week
+			return &result, nil
+		}
+		week = week.AddDate(0, 0, 7)
+	}
+
+	return nil, nil
+}
+
+// mondayOf returns the Monday at midnight UTC of the week containing d.
+func mondayOf(d time.Time) time.Time {
+	weekday := int(d.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	offset := 1 - weekday
+	return time.Date(d.Year(), d.Month(), d.Day()+offset, 0, 0, 0, 0, d.Location())
+}
+
 // scanEntries drains a *sql.Rows cursor into a slice of WorkDayEntry.
 func scanEntries(rows interface {
 	Next() bool

@@ -153,12 +153,28 @@ The application is installable as a PWA on supported browsers and devices:
 #### Diary (default view)
 
 - A **user selector** at the top allows switching between family members
-- A **week navigator** (← Prev / Next →) moves between Monday-anchored weeks; the current week is shown on load
+- A **week navigator** (← Prev / Next →) moves between Monday-anchored weeks
 - A **7-row entry grid** (Mon–Sun) shows day type selector and hours input for each day
   - Weekend rows are visually de-emphasised
   - Hours field is enabled only for `wfh` / `part_wfh` day types; automatically disabled and cleared for other types
   - When the day type is changed **to `wfh`**, the hours field is auto-populated with the user's `default_hours` from their profile (if set); changing to `part_wfh` enables the field but leaves it blank
 - **Save Week** submits all 7 rows to the backend; a brief "Saved" confirmation is shown on success
+- A **week status indicator** is displayed below the date range heading:
+  - 🔴 **"Week not submitted"** — fewer than 7 entries exist for the displayed week
+  - 🟢 **"Week submitted"** — all 7 entries are present for the displayed week
+  - The indicator is updated on every `loadWeek()` call using the entry count returned by the existing `getEntries` API — no additional request is needed
+
+#### Smart Initial Load
+
+On app load (without a `?week=` query parameter), instead of always showing the current week, the app navigates to the **oldest week in the current financial year that has fewer than 7 entries saved**. If all weeks up to and including the current week are complete, the app falls back to the current week.
+
+- A "week" is considered complete when all 7 days (Monday–Sunday) have entries saved, regardless of day type
+- Weeks are checked from the first Monday on or after July 1 of the current FY up to and including the current week's Monday; future weeks are not checked
+- The existing `?week=YYYY-MM-DD` URL query parameter still takes precedence over this logic
+
+#### Auto-Advance After Saving a Past Week
+
+After successfully saving a week that is before the current week, the app automatically advances to the **next incomplete week** (i.e. calls the API with `from_date = savedWeek + 7 days`). If no incomplete week is found from that point, it navigates to the current week. Saving the current week retains existing behaviour (stay on the current week).
 
 #### Settings
 
@@ -238,7 +254,27 @@ A background goroutine runs every `NOTIFICATION_SCHEDULER_INTERVAL` (default `10
 
 VAPID keys are auto-generated on first run and stored in the `app_config` database table.
 
-### API
+### API (entries)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/users/{id}/entries?week_start=YYYY-MM-DD` | Returns entries for the 7-day window starting on `week_start` |
+| `POST` | `/api/users/{id}/entries` | Creates or updates a batch of day entries for the user |
+| `GET` | `/api/users/{id}/entries/first-incomplete-week` | Returns the Monday of the first week with < 7 entries |
+
+#### `GET /api/users/{id}/entries/first-incomplete-week`
+
+Query params:
+- `financial_year` (optional) — defaults to current FY derived from today's date
+- `from_date` (optional, `YYYY-MM-DD` Monday) — start searching from this week; defaults to first Monday ≥ July 1 of the FY
+
+Response:
+- `{ "week_start": "YYYY-MM-DD" }` — Monday of the first week with < 7 entries
+- `{ "week_start": null }` — all weeks up to the current week are complete
+
+Implementation: fetches all entry dates for the user in the FY, then iterates week-by-week in Go to find the first with fewer than 7 entries.
+
+### API (notifications)
 
 | Method | Path | Description |
 |---|---|---|

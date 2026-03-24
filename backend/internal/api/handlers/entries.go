@@ -8,6 +8,74 @@ import (
 	"time"
 )
 
+// GetFirstIncompleteWeek returns the Monday of the first week (from from_date)
+// with fewer than 7 entries for the user in the given financial year.
+//
+// Query params:
+//   - financial_year (optional): defaults to current FY
+//   - from_date (optional, YYYY-MM-DD Monday): start search from this week;
+//     defaults to first Monday ≥ July 1 of the FY
+func (h *Handler) GetFirstIncompleteWeek(w http.ResponseWriter, r *http.Request) {
+	userID, ok := pathUserID(r)
+	if !ok {
+		respondError(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+
+	user, err := h.Store.GetUserByID(r.Context(), userID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "could not retrieve user")
+		return
+	}
+	if user == nil {
+		respondError(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	today := time.Now().UTC()
+
+	financialYear, hasFY := queryInt(r, "financial_year")
+	if !hasFY {
+		financialYear = model.FinancialYear(today)
+	}
+
+	var fromDate time.Time
+	if fromDateStr := r.URL.Query().Get("from_date"); fromDateStr != "" {
+		fromDate, err = time.Parse("2006-01-02", fromDateStr)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, "from_date must be in YYYY-MM-DD format")
+			return
+		}
+	} else {
+		fromDate = firstMondayOfFY(financialYear)
+	}
+
+	result, err := h.Store.GetFirstIncompleteWeek(r.Context(), userID, financialYear, fromDate, today)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "could not determine first incomplete week")
+		return
+	}
+
+	var weekStart *string
+	if result != nil {
+		s := result.Format("2006-01-02")
+		weekStart = &s
+	}
+	respondJSON(w, map[string]any{"week_start": weekStart})
+}
+
+// firstMondayOfFY returns the Monday of the week containing July 1 of the
+// financial year that starts in (financialYear - 1).
+// e.g. FY2026 → Jul 1 2025 is a Tuesday → returns Mon 30 Jun 2025.
+func firstMondayOfFY(financialYear int) time.Time {
+	jul1 := time.Date(financialYear-1, time.July, 1, 0, 0, 0, 0, time.UTC)
+	dow := int(jul1.Weekday())
+	if dow == 0 {
+		dow = 7
+	}
+	return jul1.AddDate(0, 0, 1-dow)
+}
+
 // entryRequest is the JSON shape accepted when upserting entries.
 type entryRequest struct {
 	EntryDate string        `json:"entry_date"` // YYYY-MM-DD

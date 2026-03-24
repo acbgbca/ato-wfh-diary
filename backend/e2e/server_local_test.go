@@ -17,6 +17,13 @@ import (
 
 const localAuthHeader = "X-Test-User"
 
+// testAuthHeader is the HTTP header used to authenticate direct API calls in tests.
+var testAuthHeader = localAuthHeader
+
+// testUsername returns the username to use for API calls, consistent with
+// what newPage sets on the browser for this test.
+func testUsername(_ *testing.T, fallback string) string { return fallback }
+
 // newE2EServer starts a test HTTP server with a real in-memory SQLite database
 // and the embedded frontend. Returns the server's base URL.
 func newE2EServer(t *testing.T) string {

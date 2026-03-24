@@ -1,6 +1,7 @@
 package db_test
 
 import (
+	"ato-wfh-diary/internal/db"
 	"ato-wfh-diary/internal/model"
 	"context"
 	"testing"
@@ -316,4 +317,269 @@ func TestUpsertEntries_WithNotes(t *testing.T) {
 // date is a convenience helper for creating a UTC midnight time.Time.
 func date(year, month, day int) time.Time {
 	return time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
+}
+
+// seedCompleteWeek inserts all 7 entries for the given Monday in a single call.
+func seedEntry(t *testing.T, s *db.Store, userID int64, d time.Time) {
+	t.Helper()
+	if err := s.UpsertEntries(context.Background(), []model.WorkDayEntry{
+		{UserID: userID, EntryDate: d, DayType: model.DayTypeOffice},
+	}); err != nil {
+		t.Fatalf("seedEntry %s: %v", d.Format("2006-01-02"), err)
+	}
+}
+
+func seedCompleteWeek(t *testing.T, s *db.Store, userID int64, weekMonday time.Time) {
+	t.Helper()
+	entries := make([]model.WorkDayEntry, 7)
+	for i := 0; i < 7; i++ {
+		entries[i] = model.WorkDayEntry{
+			UserID:    userID,
+			EntryDate: weekMonday.AddDate(0, 0, i),
+			DayType:   model.DayTypeOffice,
+		}
+	}
+	if err := s.UpsertEntries(context.Background(), entries); err != nil {
+		t.Fatalf("seedCompleteWeek: %v", err)
+	}
+}
+
+func TestGetFirstIncompleteWeek_NoEntries(t *testing.T) {
+	s := newTestStore(t)
+	user := seedUser(t, s, "alice", "Alice Smith")
+
+	// FY2026: first Monday = 2025-07-07
+	fromDate := monday(2025, 7, 7)
+	today := date(2025, 7, 9)
+
+	result, err := s.GetFirstIncompleteWeek(context.Background(), user.ID, 2026, fromDate, today)
+	if err != nil {
+		t.Fatalf("GetFirstIncompleteWeek: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected a week start, got nil")
+	}
+	if !result.Equal(fromDate) {
+		t.Errorf("week start: got %v, want %v", result, fromDate)
+	}
+}
+
+func TestGetFirstIncompleteWeek_AllComplete(t *testing.T) {
+	s := newTestStore(t)
+	user := seedUser(t, s, "alice", "Alice Smith")
+
+	weekStart := monday(2025, 7, 7)
+	today := date(2025, 7, 9) // within same week
+
+	seedCompleteWeek(t, s, user.ID, weekStart)
+
+	result, err := s.GetFirstIncompleteWeek(context.Background(), user.ID, 2026, weekStart, today)
+	if err != nil {
+		t.Fatalf("GetFirstIncompleteWeek: %v", err)
+	}
+	if result != nil {
+		t.Errorf("expected nil (all complete), got %v", result)
+	}
+}
+
+func TestGetFirstIncompleteWeek_FirstWeekIncomplete(t *testing.T) {
+	s := newTestStore(t)
+	user := seedUser(t, s, "alice", "Alice Smith")
+
+	weekStart := monday(2025, 7, 7)
+	today := date(2025, 7, 14)
+
+	// Only 3 entries in the first week
+	entries := []model.WorkDayEntry{
+		{UserID: user.ID, EntryDate: date(2025, 7, 7), DayType: model.DayTypeWFH, Hours: 8},
+		{UserID: user.ID, EntryDate: date(2025, 7, 8), DayType: model.DayTypeOffice},
+		{UserID: user.ID, EntryDate: date(2025, 7, 9), DayType: model.DayTypeOffice},
+	}
+	if err := s.UpsertEntries(context.Background(), entries); err != nil {
+		t.Fatalf("UpsertEntries: %v", err)
+	}
+
+	result, err := s.GetFirstIncompleteWeek(context.Background(), user.ID, 2026, weekStart, today)
+	if err != nil {
+		t.Fatalf("GetFirstIncompleteWeek: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected a week start, got nil")
+	}
+	if !result.Equal(weekStart) {
+		t.Errorf("week start: got %v, want %v", result, weekStart)
+	}
+}
+
+func TestGetFirstIncompleteWeek_SecondWeekIncomplete(t *testing.T) {
+	s := newTestStore(t)
+	user := seedUser(t, s, "alice", "Alice Smith")
+
+	week1 := monday(2025, 7, 7)
+	week2 := monday(2025, 7, 14)
+	today := date(2025, 7, 16)
+
+	seedCompleteWeek(t, s, user.ID, week1)
+	// week2 incomplete: only 2 entries
+	entries := []model.WorkDayEntry{
+		{UserID: user.ID, EntryDate: date(2025, 7, 14), DayType: model.DayTypeWFH, Hours: 8},
+		{UserID: user.ID, EntryDate: date(2025, 7, 15), DayType: model.DayTypeOffice},
+	}
+	if err := s.UpsertEntries(context.Background(), entries); err != nil {
+		t.Fatalf("UpsertEntries: %v", err)
+	}
+
+	result, err := s.GetFirstIncompleteWeek(context.Background(), user.ID, 2026, week1, today)
+	if err != nil {
+		t.Fatalf("GetFirstIncompleteWeek: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected a week start, got nil")
+	}
+	if !result.Equal(week2) {
+		t.Errorf("week start: got %v, want %v", result, week2)
+	}
+}
+
+func TestGetFirstIncompleteWeek_RespectsFromDate(t *testing.T) {
+	s := newTestStore(t)
+	user := seedUser(t, s, "alice", "Alice Smith")
+
+	week1 := monday(2025, 7, 7)  // incomplete
+	week2 := monday(2025, 7, 14) // complete
+	today := date(2025, 7, 16)
+
+	// week1 is incomplete, week2 is complete
+	seedCompleteWeek(t, s, user.ID, week2)
+
+	// Start searching from week2 — should return nil since week2 is complete
+	result, err := s.GetFirstIncompleteWeek(context.Background(), user.ID, 2026, week2, today)
+	if err != nil {
+		t.Fatalf("GetFirstIncompleteWeek: %v", err)
+	}
+	if result != nil {
+		t.Errorf("expected nil (from_date skips week1), got %v", result)
+	}
+
+	// Start searching from week1 — should return week1
+	result2, err := s.GetFirstIncompleteWeek(context.Background(), user.ID, 2026, week1, today)
+	if err != nil {
+		t.Fatalf("GetFirstIncompleteWeek week1: %v", err)
+	}
+	if result2 == nil {
+		t.Fatal("expected week1, got nil")
+	}
+	if !result2.Equal(week1) {
+		t.Errorf("week start: got %v, want %v", result2, week1)
+	}
+}
+
+func TestGetFirstIncompleteWeek_DoesNotCheckFutureWeeks(t *testing.T) {
+	s := newTestStore(t)
+	user := seedUser(t, s, "alice", "Alice Smith")
+
+	week1 := monday(2025, 7, 7)
+	week2 := monday(2025, 7, 14) // future relative to today
+	today := date(2025, 7, 9)    // Wednesday in week1
+
+	// week1 complete, week2 empty but in the future
+	seedCompleteWeek(t, s, user.ID, week1)
+
+	result, err := s.GetFirstIncompleteWeek(context.Background(), user.ID, 2026, week1, today)
+	if err != nil {
+		t.Fatalf("GetFirstIncompleteWeek: %v", err)
+	}
+	if result != nil {
+		t.Errorf("expected nil (week2 is future), got %v", result)
+	}
+	_ = week2
+}
+
+// TestGetFirstIncompleteWeek_CrossFYBoundary checks that the week straddling the
+// FY start (e.g. Mon 30 Jun for FY2026 where Jul 1 is Tuesday) is treated as
+// complete when all days *within* the FY have entries, even though the Monday
+// itself belongs to the previous FY.
+func TestGetFirstIncompleteWeek_CrossFYBoundary(t *testing.T) {
+	s := newTestStore(t)
+	user := seedUser(t, s, "alice", "Alice")
+
+	// FY2026: Jul 1 2025 is Tuesday → first week starts Mon 30 Jun 2025.
+	// Seed entries for the 6 days that fall within FY2026 (Jul 1–6 inclusive).
+	// Jun 30 is FY2025 and is intentionally NOT seeded.
+	fy2026Days := []time.Time{
+		date(2025, 7, 1), date(2025, 7, 2), date(2025, 7, 3),
+		date(2025, 7, 4), date(2025, 7, 5), date(2025, 7, 6),
+	}
+	for _, d := range fy2026Days {
+		seedEntry(t, s, user.ID, d)
+	}
+
+	fromDate := monday(2025, 6, 30) // Mon 30 Jun — firstMondayOfFY(2026)
+	today := date(2025, 7, 6)       // within the same week
+
+	result, err := s.GetFirstIncompleteWeek(context.Background(), user.ID, 2026, fromDate, today)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != nil {
+		t.Errorf("expected nil (all in-FY days complete), got %v", result.Format("2006-01-02"))
+	}
+}
+
+// TestGetFirstIncompleteWeek_CrossFYBoundaryIncomplete checks that the cross-FY
+// first week is returned as incomplete when some in-FY days are missing.
+func TestGetFirstIncompleteWeek_CrossFYBoundaryIncomplete(t *testing.T) {
+	s := newTestStore(t)
+	user := seedUser(t, s, "alice", "Alice")
+
+	// Seed only 5 of the 6 FY2026 days in the first week — missing Jul 6.
+	for _, d := range []time.Time{
+		date(2025, 7, 1), date(2025, 7, 2), date(2025, 7, 3),
+		date(2025, 7, 4), date(2025, 7, 5),
+	} {
+		seedEntry(t, s, user.ID, d)
+	}
+
+	fromDate := monday(2025, 6, 30)
+	today := date(2025, 7, 6)
+
+	result, err := s.GetFirstIncompleteWeek(context.Background(), user.ID, 2026, fromDate, today)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected the cross-FY week to be returned as incomplete, got nil")
+	}
+	got := result.Format("2006-01-02")
+	if got != "2025-06-30" {
+		t.Errorf("got %q, want 2025-06-30", got)
+	}
+}
+
+func TestGetFirstIncompleteWeek_IsolatedByUser(t *testing.T) {
+	s := newTestStore(t)
+	alice := seedUser(t, s, "alice", "Alice Smith")
+	bob := seedUser(t, s, "bob", "Bob Brown")
+
+	weekStart := monday(2025, 7, 7)
+	today := date(2025, 7, 9)
+
+	seedCompleteWeek(t, s, alice.ID, weekStart)
+	// Bob has no entries
+
+	aliceResult, err := s.GetFirstIncompleteWeek(context.Background(), alice.ID, 2026, weekStart, today)
+	if err != nil {
+		t.Fatalf("alice: %v", err)
+	}
+	if aliceResult != nil {
+		t.Errorf("alice: expected nil, got %v", aliceResult)
+	}
+
+	bobResult, err := s.GetFirstIncompleteWeek(context.Background(), bob.ID, 2026, weekStart, today)
+	if err != nil {
+		t.Fatalf("bob: %v", err)
+	}
+	if bobResult == nil {
+		t.Fatal("bob: expected a week start, got nil")
+	}
 }

@@ -3,6 +3,10 @@
 package e2e_test
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +14,51 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
 )
+
+// seedWeekEntries makes a direct API call to seed 7 entries for the given weekMonday (YYYY-MM-DD).
+func seedWeekEntries(t *testing.T, serverURL, username string, userID int64, weekMonday string) {
+	t.Helper()
+	// Parse weekMonday
+	base, err := time.Parse("2006-01-02", weekMonday)
+	if err != nil {
+		t.Fatalf("seedWeekEntries: parse date: %v", err)
+	}
+	entries := make([]map[string]any, 7)
+	for i := 0; i < 7; i++ {
+		entries[i] = map[string]any{
+			"entry_date": base.AddDate(0, 0, i).Format("2006-01-02"),
+			"day_type":   "office",
+			"hours":      0,
+		}
+	}
+	body, _ := json.Marshal(entries)
+	req, _ := http.NewRequest(http.MethodPost,
+		fmt.Sprintf("%s/api/users/%d/entries", serverURL, userID),
+		bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(testAuthHeader, username)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("seedWeekEntries %s: status %v err %v", weekMonday, resp.StatusCode, err)
+	}
+}
+
+// getOrCreateUser calls GET /api/me to get the user ID for the given username.
+func getUserID(t *testing.T, serverURL, username string) int64 {
+	t.Helper()
+	req, _ := http.NewRequest(http.MethodGet, serverURL+"/api/me", nil)
+	req.Header.Set(testAuthHeader, username)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("getUserID: status %v err %v", resp.StatusCode, err)
+	}
+	defer resp.Body.Close()
+	var user struct {
+		ID int64 `json:"id"`
+	}
+	json.NewDecoder(resp.Body).Decode(&user)
+	return user.ID
+}
 
 // waitFor polls a JS predicate (arrow function returning bool) until true or timeout.
 func waitFor(t *testing.T, page *rod.Page, jsExpr string) {
@@ -47,10 +96,16 @@ func TestE2E_PageLoads(t *testing.T) {
 
 // TestE2E_SaveAndReloadEntry enters a WFH day, saves it, reloads the page,
 // and verifies the entry persists.
+// Uses ?week= to navigate to a specific week so smart-init does not redirect
+// to a different week after reload.
 func TestE2E_SaveAndReloadEntry(t *testing.T) {
 	serverURL := newE2EServer(t)
 	_, page := newPage(t, "alice")
-	page.MustNavigate(serverURL)
+
+	// Use a specific week (current week 2026-03-23) so ?week= takes
+	// precedence over smart-init on both initial load and reload.
+	weekURL := serverURL + "?week=2026-03-23"
+	page.MustNavigate(weekURL)
 
 	// Wait for the week rows to render.
 	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
@@ -60,12 +115,12 @@ func TestE2E_SaveAndReloadEntry(t *testing.T) {
 	firstRow.MustElement(".day-type-select").MustSelect("Work From Home")
 	firstRow.MustElement(".hours-input").MustInput("7.5")
 
-	// Save.
+	// Save (current week, so no auto-advance).
 	page.MustElement("#save-entries").MustClick()
 	waitFor(t, page, `() => document.getElementById('save-status').textContent === 'Saved'`)
 
-	// Reload and verify data persisted.
-	page.MustReload()
+	// Reload with same ?week= and verify data persisted.
+	page.MustNavigate(weekURL)
 	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
 
 	// Allow the async getEntries call to complete and populate the inputs.
@@ -342,5 +397,134 @@ func TestE2E_WeekNavigation(t *testing.T) {
 	back := page.MustElement("#week-label").MustText()
 	if back != initial {
 		t.Errorf("week label after round-trip: got %q, want %q", back, initial)
+	}
+}
+
+// TestE2E_WeekStatusIndicator_NotSubmitted verifies that loading a week with
+// fewer than 7 entries displays the "not submitted" status indicator.
+func TestE2E_WeekStatusIndicator_NotSubmitted(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+
+	// Navigate to a specific past week with no entries
+	page.MustNavigate(serverURL + "?week=2025-07-07")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+	time.Sleep(300 * time.Millisecond)
+
+	status := page.MustElement("#week-status").MustText()
+	if !strings.Contains(status, "not submitted") {
+		t.Errorf("week status: got %q, want text containing 'not submitted'", status)
+	}
+}
+
+// TestE2E_WeekStatusIndicator_Submitted verifies that loading a week with all
+// 7 entries displays the "submitted" status indicator.
+func TestE2E_WeekStatusIndicator_Submitted(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+
+	// Create user and seed a complete week
+	u := testUsername(t, "alice")
+	userID := getUserID(t, serverURL, u)
+	seedWeekEntries(t, serverURL, u, userID, "2025-07-07")
+
+	page.MustNavigate(serverURL + "?week=2025-07-07")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+	time.Sleep(300 * time.Millisecond)
+
+	status := page.MustElement("#week-status").MustText()
+	if !strings.Contains(status, "submitted") || strings.Contains(status, "not submitted") {
+		t.Errorf("week status: got %q, want text containing 'submitted' but not 'not submitted'", status)
+	}
+}
+
+// TestE2E_SmartInit_LoadsFirstIncompleteWeek verifies that on initial load
+// (without ?week= param) the app navigates to the oldest incomplete week.
+func TestE2E_SmartInit_LoadsFirstIncompleteWeek(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+
+	// Get user ID and seed complete weeks for the first 3 weeks of FY2026.
+	// FY2026 starts on the week of Mon 30 Jun 2025 (the week containing Jul 1).
+	// 2025-06-30, 2025-07-07 and 2025-07-14 are complete; 2025-07-21 is incomplete.
+	u := testUsername(t, "alice")
+	userID := getUserID(t, serverURL, u)
+	seedWeekEntries(t, serverURL, u, userID, "2025-06-30")
+	seedWeekEntries(t, serverURL, u, userID, "2025-07-07")
+	seedWeekEntries(t, serverURL, u, userID, "2025-07-14")
+	// 2025-07-21 is left incomplete
+
+	page.MustNavigate(serverURL)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+	time.Sleep(500 * time.Millisecond)
+
+	// The first row should have data-date of 2025-07-21 (first incomplete week)
+	rows := page.MustElements("#entry-tbody tr.day-row")
+	firstDate, err := rows[0].Attribute("data-date")
+	if err != nil || firstDate == nil {
+		t.Fatal("could not read data-date from first row")
+	}
+	if *firstDate != "2025-07-21" {
+		t.Errorf("smart init: first row date got %q, want 2025-07-21", *firstDate)
+	}
+}
+
+// TestE2E_SmartInit_FallsBackToCurrentWeek verifies that when all weeks up to
+// the current week are complete, the app falls back to the current week.
+func TestE2E_SmartInit_FallsBackToCurrentWeek(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+
+	// Load app without seeding — no entries means the first Monday of FY2026
+	// (2025-07-07) is incomplete. Since today (2026-03-24) is well past that,
+	// the smart init should navigate there, NOT the current week.
+	// So this test just verifies it doesn't always land on the current week.
+	page.MustNavigate(serverURL)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+	time.Sleep(500 * time.Millisecond)
+
+	label := page.MustElement("#week-label").MustText()
+	// Current week label would contain "Mar" (March 2026); the first incomplete
+	// week (2025-07-07) would contain "Jul".
+	if strings.Contains(label, "Mar 2026") {
+		t.Errorf("smart init loaded current week when incomplete weeks exist: %q", label)
+	}
+}
+
+// TestE2E_AutoAdvance_AfterSavingPastWeek verifies that after saving a past
+// week the app automatically advances to the next incomplete week.
+func TestE2E_AutoAdvance_AfterSavingPastWeek(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+
+	u := testUsername(t, "alice")
+	userID := getUserID(t, serverURL, u)
+	// Seed 2025-07-14 as complete; leave 2025-07-07 and 2025-07-21 empty.
+	seedWeekEntries(t, serverURL, u, userID, "2025-07-14")
+
+	// Navigate directly to the first incomplete week (2025-07-07)
+	page.MustNavigate(serverURL + "?week=2025-07-07")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Set all 7 rows to "office" and save
+	page.MustEval(`() => {
+		document.querySelectorAll('#entry-tbody tr.day-row').forEach(row => {
+			row.querySelector('.day-type-select').value = 'office';
+		});
+	}`)
+	page.MustElement("#save-entries").MustClick()
+	waitFor(t, page, `() => document.getElementById('save-status').textContent === 'Saved'`)
+
+	// After saving a past week, app should advance to the next incomplete week.
+	// 2025-07-14 is complete, so next incomplete is 2025-07-21.
+	time.Sleep(800 * time.Millisecond)
+
+	rows := page.MustElements("#entry-tbody tr.day-row")
+	firstDate, err := rows[0].Attribute("data-date")
+	if err != nil || firstDate == nil {
+		t.Fatal("could not read data-date from first row after auto-advance")
+	}
+	if *firstDate != "2025-07-21" {
+		t.Errorf("auto-advance: first row date got %q, want 2025-07-21", *firstDate)
 	}
 }
