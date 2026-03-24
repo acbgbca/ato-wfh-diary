@@ -81,6 +81,20 @@ Each user can optionally configure a profile via the **Settings** page. The prof
 
 The frontend is a single-page vanilla HTML/JavaScript application served by the Go backend (embedded in the binary at build time).
 
+### Cache Busting
+
+Static JS and CSS assets are cache-busted using query string versioning:
+
+- The build system injects the **git short SHA** (`BUILD_HASH`) into the binary at build time via `-ldflags="-X main.buildHash=<sha>"`
+- `index.html` is served as a Go template; `{{.BuildHash}}` is substituted into asset URLs at request time:
+  ```html
+  <script type="module" src="/js/app.js?v={{.BuildHash}}"></script>
+  <link rel="stylesheet" href="/css/app.css?v={{.BuildHash}}">
+  ```
+- HTTP cache headers are set per asset type:
+  - `index.html`: `Cache-Control: no-cache` — browser always revalidates
+  - JS / CSS: `Cache-Control: max-age=31536000, immutable` — cached indefinitely (URL changes with each build)
+
 ### Styling
 
 - [Pico.css v2](https://picocss.com/) (classless variant, loaded from CDN) provides base styling for all semantic HTML elements

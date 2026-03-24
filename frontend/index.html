@@ -9,7 +9,7 @@
   <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/icons/icon.svg">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css">
-  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/app.css?v={{.BuildHash}}">
 </head>
 <body>
   <header>
@@ -150,6 +150,6 @@
     </section>
   </main>
 
-  <script type="module" src="/js/app.js"></script>
+  <script type="module" src="/js/app.js?v={{.BuildHash}}"></script>
 </body>
 </html>

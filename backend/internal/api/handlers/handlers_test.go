@@ -32,7 +32,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 		t.Fatalf("generate vapid keys: %v", err)
 	}
 	h := handlers.NewWithConfig(store, publicKey, "Australia/Melbourne")
-	router := handlers.NewRouter(h, testAuthHeader, nil)
+	router := handlers.NewRouter(h, testAuthHeader, nil, "")
 
 	srv := httptest.NewServer(router)
 	t.Cleanup(func() {

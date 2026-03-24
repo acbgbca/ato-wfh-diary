@@ -9,7 +9,10 @@ GO_DIR     := backend
 # Falls back to "dev" when there are no tags or no Git repo.
 VERSION    := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
-BUILD_CMD  := go build -ldflags="-X main.version=$(VERSION)" -o ../$(BINARY) ./cmd/server
+# Short git SHA injected into index.html asset URLs for cache-busting.
+BUILD_HASH := $(shell git rev-parse --short HEAD 2>/dev/null || echo "dev")
+
+BUILD_CMD  := go build -ldflags="-X main.version=$(VERSION) -X main.buildHash=$(BUILD_HASH)" -o ../$(BINARY) ./cmd/server
 
 .DEFAULT_GOAL := help
 
