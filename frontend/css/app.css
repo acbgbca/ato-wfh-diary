@@ -27,6 +27,16 @@
   padding: 0.35rem 0.8rem;
 }
 
+/* ── Week status indicator ─────────────────────────────────────────────────── */
+.week-status-bar {
+  margin-bottom: 0.5rem;
+  min-height: 1.4em;
+}
+
+.week-status {
+  font-size: 0.9rem;
+}
+
 /* ── Entry table ───────────────────────────────────────────────────────────── */
 .table-wrapper {
   overflow-x: auto;

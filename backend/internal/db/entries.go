@@ -111,6 +111,64 @@ func (s *Store) GetFYAllEntries(ctx context.Context, userID int64, financialYear
 	return scanEntries(rows)
 }
 
+// GetFirstIncompleteWeek returns the Monday of the first week, starting from
+// fromDate, that has fewer than 7 entries for the user in the given financial
+// year. It only checks weeks up to and including the week that contains today.
+// Returns nil if all weeks up to today are complete.
+func (s *Store) GetFirstIncompleteWeek(ctx context.Context, userID int64, financialYear int, fromDate time.Time, today time.Time) (*time.Time, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT date(entry_date) FROM work_day_entries
+		WHERE  user_id = ? AND financial_year = ?
+		ORDER  BY entry_date
+	`, userID, financialYear)
+	if err != nil {
+		return nil, fmt.Errorf("get fy entry dates: %w", err)
+	}
+	defer rows.Close()
+
+	entryDates := make(map[string]bool)
+	for rows.Next() {
+		var dateStr string
+		if err := rows.Scan(&dateStr); err != nil {
+			return nil, fmt.Errorf("scan entry date: %w", err)
+		}
+		entryDates[dateStr] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	todayMonday := mondayOf(today)
+
+	week := fromDate
+	for !week.After(todayMonday) {
+		count := 0
+		for i := 0; i < 7; i++ {
+			d := week.AddDate(0, 0, i)
+			if entryDates[d.Format("2006-01-02")] {
+				count++
+			}
+		}
+		if count < 7 {
+			result := week
+			return &result, nil
+		}
+		week = week.AddDate(0, 0, 7)
+	}
+
+	return nil, nil
+}
+
+// mondayOf returns the Monday at midnight UTC of the week containing d.
+func mondayOf(d time.Time) time.Time {
+	weekday := int(d.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	offset := 1 - weekday
+	return time.Date(d.Year(), d.Month(), d.Day()+offset, 0, 0, 0, 0, d.Location())
+}
+
 // scanEntries drains a *sql.Rows cursor into a slice of WorkDayEntry.
 func scanEntries(rows interface {
 	Next() bool

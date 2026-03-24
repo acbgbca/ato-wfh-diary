@@ -17,6 +17,16 @@ const api = {
     return fetchJSON(`/api/users/${userId}/entries?week_start=${weekStart}`);
   },
 
+  getFirstIncompleteWeek(userId, financialYear, fromDate) {
+    let url = `/api/users/${userId}/entries/first-incomplete-week`;
+    const params = new URLSearchParams();
+    if (financialYear != null) params.set('financial_year', financialYear);
+    if (fromDate != null) params.set('from_date', fromDate);
+    const qs = params.toString();
+    if (qs) url += '?' + qs;
+    return fetchJSON(url);
+  },
+
   async saveEntries(userId, entries) {
     const r = await fetch(`/api/users/${userId}/entries`, {
       method: 'POST',

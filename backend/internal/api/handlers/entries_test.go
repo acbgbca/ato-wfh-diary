@@ -202,6 +202,99 @@ func TestGetWeekEntries_MissingWeekStart(t *testing.T) {
 	}
 }
 
+func TestGetFirstIncompleteWeek_ReturnsWeekStart(t *testing.T) {
+	srv := newTestServer(t)
+	userID := mustCreateUser(t, srv, "alice")
+
+	// Seed an incomplete week in FY2026 (Jul 2025–Jun 2026)
+	// Use week of 2025-07-07 with only 3 entries
+	do(t, srv, http.MethodPost,
+		fmt.Sprintf("/api/users/%d/entries", userID),
+		"alice",
+		[]map[string]any{
+			{"entry_date": "2025-07-07", "day_type": "office", "hours": 0},
+			{"entry_date": "2025-07-08", "day_type": "office", "hours": 0},
+			{"entry_date": "2025-07-09", "day_type": "office", "hours": 0},
+		},
+	)
+
+	resp := do(t, srv, http.MethodGet,
+		fmt.Sprintf("/api/users/%d/entries/first-incomplete-week?financial_year=2026&from_date=2025-07-07", userID),
+		"alice", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	var body map[string]any
+	decodeJSON(t, resp, &body)
+	if body["week_start"] != "2025-07-07" {
+		t.Errorf("week_start: got %v, want 2025-07-07", body["week_start"])
+	}
+}
+
+func TestGetFirstIncompleteWeek_AllCompleteReturnsNull(t *testing.T) {
+	srv := newTestServer(t)
+	userID := mustCreateUser(t, srv, "alice")
+
+	// Determine the current week's Monday (today is 2026-03-23 = Monday).
+	// Use from_date set to current Monday and seed all 7 days of that week,
+	// so that the only week checked is complete.
+	weekMonday := "2026-03-23"
+	entries := make([]map[string]any, 7)
+	for i := 0; i < 7; i++ {
+		d := fmt.Sprintf("2026-03-%02d", 23+i)
+		entries[i] = map[string]any{"entry_date": d, "day_type": "office", "hours": 0}
+	}
+	do(t, srv, http.MethodPost, fmt.Sprintf("/api/users/%d/entries", userID), "alice", entries)
+
+	resp := do(t, srv, http.MethodGet,
+		fmt.Sprintf("/api/users/%d/entries/first-incomplete-week?financial_year=2026&from_date=%s", userID, weekMonday),
+		"alice", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	var body map[string]any
+	decodeJSON(t, resp, &body)
+	if body["week_start"] != nil {
+		t.Errorf("week_start: got %v, want null", body["week_start"])
+	}
+}
+
+func TestGetFirstIncompleteWeek_UserNotFound(t *testing.T) {
+	srv := newTestServer(t)
+
+	resp := do(t, srv, http.MethodGet,
+		"/api/users/9999/entries/first-incomplete-week?financial_year=2026&from_date=2025-07-07",
+		"alice", nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status: got %d, want %d", resp.StatusCode, http.StatusNotFound)
+	}
+}
+
+func TestGetFirstIncompleteWeek_Unauthorised(t *testing.T) {
+	srv := newTestServer(t)
+
+	resp := do(t, srv, http.MethodGet,
+		"/api/users/1/entries/first-incomplete-week?financial_year=2026&from_date=2025-07-07",
+		"", nil)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("status: got %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+	}
+}
+
+func TestGetFirstIncompleteWeek_InvalidFromDate(t *testing.T) {
+	srv := newTestServer(t)
+	userID := mustCreateUser(t, srv, "alice")
+
+	resp := do(t, srv, http.MethodGet,
+		fmt.Sprintf("/api/users/%d/entries/first-incomplete-week?financial_year=2026&from_date=not-a-date", userID),
+		"alice", nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status: got %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+}
+
 func TestGetWeekEntries_Unauthorised(t *testing.T) {
 	srv := newTestServer(t)
 

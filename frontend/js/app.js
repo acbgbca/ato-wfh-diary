@@ -85,9 +85,6 @@ async function init() {
     [me, allUsers] = await Promise.all([api.getMe(), api.getUsers()]);
     selectedUserId = me.id;
 
-    // Navigate to a specific week if ?week= is set (e.g. from a notification click).
-    const weekParam = new URLSearchParams(window.location.search).get('week');
-    weekStart = weekParam ? getMonday(new Date(weekParam + 'T00:00:00')) : getMonday(new Date());
     view = 'diary';
     reportFY = defaultFY();
 
@@ -98,11 +95,37 @@ async function init() {
     populateFYSelect();
     populateProfileSelects();
     bindEvents();
+
+    // Navigate to a specific week if ?week= is set (e.g. from a notification click).
+    const weekParam = new URLSearchParams(window.location.search).get('week');
+    if (weekParam) {
+      weekStart = getMonday(new Date(weekParam + 'T00:00:00'));
+    } else {
+      // Smart initial load: navigate to oldest incomplete week in current FY,
+      // falling back to the current week if all are complete.
+      weekStart = await resolveInitialWeek();
+    }
+
     showView('diary');
   } catch (e) {
     document.querySelector('main').innerHTML =
       `<p><strong>Error loading application:</strong> ${escapeHTML(e.message)}</p>`;
   }
+}
+
+// resolveInitialWeek returns the Monday of the first incomplete week in the
+// current FY, or the current week's Monday if all weeks are complete.
+async function resolveInitialWeek() {
+  try {
+    const fy = currentFY();
+    const data = await api.getFirstIncompleteWeek(me.id, fy, null);
+    if (data.week_start) {
+      return getMonday(new Date(data.week_start + 'T00:00:00'));
+    }
+  } catch (_) {
+    // On error fall back to current week
+  }
+  return getMonday(new Date());
 }
 
 function populateUserSelect() {
@@ -189,7 +212,7 @@ function showView(v) {
 }
 
 // ── Diary ──────────────────────────────────────────────────────────────────
-async function loadWeek() {
+async function loadWeek({ keepStatus = false } = {}) {
   const ws = formatDate(weekStart);
   document.getElementById('week-label').textContent =
     `${fmtLabel(ws)} — ${fmtLabel(formatDate(addDays(weekStart, 6)))}`;
@@ -262,7 +285,17 @@ async function loadWeek() {
     tbody.appendChild(notesRow);
   });
 
-  clearStatus();
+  // Update week status indicator
+  const statusEl = document.getElementById('week-status');
+  if (entries.length >= 7) {
+    statusEl.textContent = '🟢 Week submitted';
+    statusEl.className = 'week-status submitted';
+  } else {
+    statusEl.textContent = '🔴 Week not submitted';
+    statusEl.className = 'week-status not-submitted';
+  }
+
+  if (!keepStatus) clearStatus();
 }
 
 async function saveWeek() {
@@ -287,10 +320,27 @@ async function saveWeek() {
     return entry;
   });
 
+  const savedWeekStart = weekStart;
+
   try {
     await api.saveEntries(selectedUserId, entries);
     setStatus('Saved', false);
     setTimeout(clearStatus, 3000);
+
+    // Auto-advance: if the saved week is before the current week, navigate
+    // to the next incomplete week (or fall back to the current week).
+    const currentMonday = getMonday(new Date());
+    if (savedWeekStart < currentMonday) {
+      const nextFromDate = formatDate(addDays(savedWeekStart, 7));
+      const fy = currentFY();
+      const data = await api.getFirstIncompleteWeek(selectedUserId, fy, nextFromDate).catch(() => null);
+      if (data?.week_start) {
+        weekStart = getMonday(new Date(data.week_start + 'T00:00:00'));
+      } else {
+        weekStart = currentMonday;
+      }
+      await loadWeek({ keepStatus: true });
+    }
   } catch (e) {
     setStatus(e.message, true);
   }
