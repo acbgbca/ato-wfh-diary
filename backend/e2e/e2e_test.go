@@ -273,6 +273,48 @@ func TestE2E_DiaryWeekStartsOnMonday(t *testing.T) {
 	}
 }
 
+// TestE2E_WFHAutoPopulatesHours verifies that changing a day type to wfh
+// auto-populates the hours field with the user's default_hours from their profile,
+// and that changing to part_wfh leaves the hours field blank.
+func TestE2E_WFHAutoPopulatesHours(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL)
+
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Set default hours = 7.5 in profile.
+	page.MustElement("#nav-settings").MustClick()
+	waitFor(t, page, `() => !document.getElementById('view-settings').hidden`)
+	page.MustElement("#profile-default-hours").MustInput("7.5")
+	page.MustElement("#save-profile").MustClick()
+	waitFor(t, page, `() => document.getElementById('profile-status').textContent === 'Saved'`)
+
+	// Reload so userProfile is updated in the app.
+	page.MustReload()
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+	time.Sleep(500 * time.Millisecond)
+
+	rows := page.MustElements("#entry-tbody tr.day-row")
+
+	// Change first row to wfh — hours should auto-populate with 7.5.
+	rows[0].MustElement(".day-type-select").MustSelect("Work From Home")
+
+	hours := rows[0].MustElement(".hours-input").MustProperty("value").Str()
+	if hours != "7.5" {
+		t.Errorf("hours after selecting wfh: got %q, want 7.5", hours)
+	}
+
+	// Change Saturday (index 5, defaults to weekend with no hours) to part_wfh.
+	// Hours should NOT auto-populate since part_wfh has no default fill.
+	rows[5].MustElement(".day-type-select").MustSelect("Part WFH")
+
+	hoursPartial := rows[5].MustElement(".hours-input").MustProperty("value").Str()
+	if hoursPartial != "" {
+		t.Errorf("hours after selecting part_wfh: got %q, want empty", hoursPartial)
+	}
+}
+
 // TestE2E_WeekNavigation verifies that Prev/Next week buttons update the
 // week label and reload entries.
 func TestE2E_WeekNavigation(t *testing.T) {

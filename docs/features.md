@@ -157,6 +157,7 @@ The application is installable as a PWA on supported browsers and devices:
 - A **7-row entry grid** (Mon–Sun) shows day type selector and hours input for each day
   - Weekend rows are visually de-emphasised
   - Hours field is enabled only for `wfh` / `part_wfh` day types; automatically disabled and cleared for other types
+  - When the day type is changed **to `wfh`**, the hours field is auto-populated with the user's `default_hours` from their profile (if set); changing to `part_wfh` enables the field but leaves it blank
 - **Save Week** submits all 7 rows to the backend; a brief "Saved" confirmation is shown on success
 
 #### Settings
