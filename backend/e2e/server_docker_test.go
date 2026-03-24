@@ -19,6 +19,13 @@ import (
 // dockerAuthHeader matches the FORWARD_AUTH_HEADER set in docker-compose.test.yml.
 const dockerAuthHeader = "X-Forwarded-User"
 
+// testAuthHeader is the HTTP header used to authenticate direct API calls in tests.
+var testAuthHeader = dockerAuthHeader
+
+// testUsername returns t.Name() so that direct API calls use the same
+// per-test-isolated username that newPage sets on the browser.
+func testUsername(t *testing.T, _ string) string { return t.Name() }
+
 // dockerTestURL is the base URL of the container exposed by docker-compose.test.yml.
 const dockerTestURL = "http://localhost:18080"
 

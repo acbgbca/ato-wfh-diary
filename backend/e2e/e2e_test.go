@@ -36,7 +36,7 @@ func seedWeekEntries(t *testing.T, serverURL, username string, userID int64, wee
 		fmt.Sprintf("%s/api/users/%d/entries", serverURL, userID),
 		bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Test-User", username)
+	req.Header.Set(testAuthHeader, username)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("seedWeekEntries %s: status %v err %v", weekMonday, resp.StatusCode, err)
@@ -47,7 +47,7 @@ func seedWeekEntries(t *testing.T, serverURL, username string, userID int64, wee
 func getUserID(t *testing.T, serverURL, username string) int64 {
 	t.Helper()
 	req, _ := http.NewRequest(http.MethodGet, serverURL+"/api/me", nil)
-	req.Header.Set("X-Test-User", username)
+	req.Header.Set(testAuthHeader, username)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		t.Fatalf("getUserID: status %v err %v", resp.StatusCode, err)
@@ -424,8 +424,9 @@ func TestE2E_WeekStatusIndicator_Submitted(t *testing.T) {
 	_, page := newPage(t, "alice")
 
 	// Create user and seed a complete week
-	userID := getUserID(t, serverURL, "alice")
-	seedWeekEntries(t, serverURL, "alice", userID, "2025-07-07")
+	u := testUsername(t, "alice")
+	userID := getUserID(t, serverURL, u)
+	seedWeekEntries(t, serverURL, u, userID, "2025-07-07")
 
 	page.MustNavigate(serverURL + "?week=2025-07-07")
 	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
@@ -446,10 +447,11 @@ func TestE2E_SmartInit_LoadsFirstIncompleteWeek(t *testing.T) {
 	// Get user ID and seed complete weeks for the first 3 weeks of FY2026.
 	// FY2026 starts on the week of Mon 30 Jun 2025 (the week containing Jul 1).
 	// 2025-06-30, 2025-07-07 and 2025-07-14 are complete; 2025-07-21 is incomplete.
-	userID := getUserID(t, serverURL, "alice")
-	seedWeekEntries(t, serverURL, "alice", userID, "2025-06-30")
-	seedWeekEntries(t, serverURL, "alice", userID, "2025-07-07")
-	seedWeekEntries(t, serverURL, "alice", userID, "2025-07-14")
+	u := testUsername(t, "alice")
+	userID := getUserID(t, serverURL, u)
+	seedWeekEntries(t, serverURL, u, userID, "2025-06-30")
+	seedWeekEntries(t, serverURL, u, userID, "2025-07-07")
+	seedWeekEntries(t, serverURL, u, userID, "2025-07-14")
 	// 2025-07-21 is left incomplete
 
 	page.MustNavigate(serverURL)
@@ -495,9 +497,10 @@ func TestE2E_AutoAdvance_AfterSavingPastWeek(t *testing.T) {
 	serverURL := newE2EServer(t)
 	_, page := newPage(t, "alice")
 
-	userID := getUserID(t, serverURL, "alice")
+	u := testUsername(t, "alice")
+	userID := getUserID(t, serverURL, u)
 	// Seed 2025-07-14 as complete; leave 2025-07-07 and 2025-07-21 empty.
-	seedWeekEntries(t, serverURL, "alice", userID, "2025-07-14")
+	seedWeekEntries(t, serverURL, u, userID, "2025-07-14")
 
 	// Navigate directly to the first incomplete week (2025-07-07)
 	page.MustNavigate(serverURL + "?week=2025-07-07")
