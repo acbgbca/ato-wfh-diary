@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"time"
+	_ "time/tzdata" // embed IANA timezone database so LoadLocation works in minimal containers
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 )

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"log"
 	"net/http"
 )
 
@@ -17,6 +18,7 @@ func ForwardAuth(headerName string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			username := r.Header.Get(headerName)
 			if username == "" {
+				log.Printf("auth: 401 %s %s — header %q not present", r.Method, r.URL.Path, headerName)
 				http.Error(w, "unauthorised", http.StatusUnauthorized)
 				return
 			}
