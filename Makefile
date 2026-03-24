@@ -79,6 +79,10 @@ test-cover: copy-frontend ## Run tests and show coverage summary
 test-e2e: copy-frontend ## Run end-to-end browser tests (requires Chrome/Chromium)
 	cd $(GO_DIR) && go test -tags e2e -v ./e2e/...
 
+.PHONY: test-e2e-docker
+test-e2e-docker: ## Run E2E tests against a Docker container built from Dockerfile (requires Docker + Chrome/Chromium)
+	cd $(GO_DIR) && go test -tags e2e_docker -v -timeout 5m ./e2e/...
+
 # -----------------------------------------------------------------------------
 # Code quality
 # -----------------------------------------------------------------------------

@@ -1,0 +1,15 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      # Use port 18080 to avoid conflicts with a production compose stack on 8080.
+      - "18080:8080"
+    # tmpfs gives each test run a clean, empty database without needing a named
+    # volume. The app user (UID 1001) can write because tmpfs defaults to 1777.
+    tmpfs:
+      - /data
+    environment:
+      - DB_PATH=/data/wfh.db
+      - FORWARD_AUTH_HEADER=X-Forwarded-User
