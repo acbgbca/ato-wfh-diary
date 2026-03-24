@@ -15,7 +15,12 @@ const WFH_TYPES = new Set(['wfh', 'part_wfh']);
 const isWFH = t => WFH_TYPES.has(t);
 
 // ── Date utilities ─────────────────────────────────────────────────────────
-const formatDate = d => d.toISOString().slice(0, 10);
+const formatDate = d => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
 function getMonday(date) {
   const d = new Date(date);
