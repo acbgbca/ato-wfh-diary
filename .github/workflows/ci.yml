@@ -37,3 +37,21 @@ jobs:
 
       - name: Run E2E tests
         run: make test-e2e
+
+  e2e-docker:
+    name: E2E tests (Docker container)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Install Chromium
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends chromium-browser
+
+      - name: Run E2E tests against Docker container
+        run: make test-e2e-docker

@@ -1,70 +1,15 @@
-//go:build e2e
+//go:build e2e || e2e_docker
 
 package e2e_test
 
 import (
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"ato-wfh-diary/frontend"
-	"ato-wfh-diary/internal/api/handlers"
-	"ato-wfh-diary/internal/db"
-	"ato-wfh-diary/migrations"
-
 	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 )
-
-// newE2EServer starts a test HTTP server with a real in-memory SQLite database
-// and the embedded frontend. The auth header name is "X-Test-User".
-func newE2EServer(t *testing.T) *httptest.Server {
-	t.Helper()
-	database, err := db.Open(":memory:", migrations.FS)
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	store := db.NewStore(database)
-	h := handlers.New(store)
-	router := handlers.NewRouter(h, "X-Test-User", frontend.FS, "test")
-	srv := httptest.NewServer(router)
-	t.Cleanup(func() {
-		srv.Close()
-		database.Close()
-	})
-	return srv
-}
-
-// newPage launches a headless browser page with the Forward Auth header preset
-// to username so every request is automatically authenticated.
-func newPage(t *testing.T, username string) (*rod.Browser, *rod.Page) {
-	t.Helper()
-
-	l := launcher.New().Headless(true)
-	if path, ok := launcher.LookPath(); ok {
-		l = l.Bin(path)
-	}
-	controlURL := l.MustLaunch()
-
-	browser := rod.New().ControlURL(controlURL).MustConnect()
-	t.Cleanup(func() { browser.MustClose() })
-
-	page := browser.MustPage("")
-
-	// Inject the Forward Auth header for every request from this page,
-	// including fetch() calls made by JavaScript.  The high-level
-	// SetExtraHeaders enables the network domain before applying the headers,
-	// which is required for them to be attached to XHR/fetch requests.
-	cleanup, err := page.SetExtraHeaders([]string{"X-Test-User", username})
-	if err != nil {
-		t.Fatalf("set extra headers: %v", err)
-	}
-	t.Cleanup(cleanup)
-
-	return browser, page
-}
 
 // waitFor polls a JS predicate (arrow function returning bool) until true or timeout.
 func waitFor(t *testing.T, page *rod.Page, jsExpr string) {
@@ -82,9 +27,9 @@ func waitFor(t *testing.T, page *rod.Page, jsExpr string) {
 
 // TestE2E_PageLoads verifies the app loads and shows the diary view.
 func TestE2E_PageLoads(t *testing.T) {
-	srv := newE2EServer(t)
+	serverURL := newE2EServer(t)
 	_, page := newPage(t, "alice")
-	page.MustNavigate(srv.URL)
+	page.MustNavigate(serverURL)
 
 	// Diary view must be present and report view hidden.
 	page.MustElement("#entry-tbody")
@@ -103,9 +48,9 @@ func TestE2E_PageLoads(t *testing.T) {
 // TestE2E_SaveAndReloadEntry enters a WFH day, saves it, reloads the page,
 // and verifies the entry persists.
 func TestE2E_SaveAndReloadEntry(t *testing.T) {
-	srv := newE2EServer(t)
+	serverURL := newE2EServer(t)
 	_, page := newPage(t, "alice")
-	page.MustNavigate(srv.URL)
+	page.MustNavigate(serverURL)
 
 	// Wait for the week rows to render.
 	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
@@ -142,9 +87,9 @@ func TestE2E_SaveAndReloadEntry(t *testing.T) {
 // TestE2E_ReportShowsTotals saves a WFH entry then checks the report view
 // reflects the correct total hours.
 func TestE2E_ReportShowsTotals(t *testing.T) {
-	srv := newE2EServer(t)
+	serverURL := newE2EServer(t)
 	_, page := newPage(t, "alice")
-	page.MustNavigate(srv.URL)
+	page.MustNavigate(serverURL)
 
 	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
 
@@ -177,9 +122,9 @@ func TestE2E_ReportShowsTotals(t *testing.T) {
 // TestE2E_Settings_SaveAndReload saves a user profile via the Settings page
 // and verifies it persists after reload.
 func TestE2E_Settings_SaveAndReload(t *testing.T) {
-	srv := newE2EServer(t)
+	serverURL := newE2EServer(t)
 	_, page := newPage(t, "alice")
-	page.MustNavigate(srv.URL)
+	page.MustNavigate(serverURL)
 
 	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
 
@@ -218,9 +163,9 @@ func TestE2E_Settings_SaveAndReload(t *testing.T) {
 // TestE2E_WeekDefaults_FromProfile verifies that navigating to an empty week
 // pre-populates entries from the user's profile.
 func TestE2E_WeekDefaults_FromProfile(t *testing.T) {
-	srv := newE2EServer(t)
+	serverURL := newE2EServer(t)
 	_, page := newPage(t, "alice")
-	page.MustNavigate(srv.URL)
+	page.MustNavigate(serverURL)
 
 	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
 
@@ -267,9 +212,9 @@ func TestE2E_WeekDefaults_FromProfile(t *testing.T) {
 // TestE2E_PrintPDFButton verifies the Print PDF button is present in the
 // report view and is clickable without errors.
 func TestE2E_PrintPDFButton(t *testing.T) {
-	srv := newE2EServer(t)
+	serverURL := newE2EServer(t)
 	_, page := newPage(t, "alice")
-	page.MustNavigate(srv.URL)
+	page.MustNavigate(serverURL)
 
 	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
 
@@ -296,7 +241,7 @@ func TestE2E_PrintPDFButton(t *testing.T) {
 // Uses a known Tuesday (2026-03-24) via the ?week= query param.
 // Expected: week label starts "Mon" and first row data-date is "2026-03-23".
 func TestE2E_DiaryWeekStartsOnMonday(t *testing.T) {
-	srv := newE2EServer(t)
+	serverURL := newE2EServer(t)
 	_, page := newPage(t, "alice")
 
 	// Emulate Australian Eastern time (UTC+11 in March) — at this offset,
@@ -307,7 +252,7 @@ func TestE2E_DiaryWeekStartsOnMonday(t *testing.T) {
 		t.Fatalf("set timezone override: %v", err)
 	}
 
-	page.MustNavigate(srv.URL + "?week=2026-03-24") // Tuesday 24 Mar 2026
+	page.MustNavigate(serverURL + "?week=2026-03-24") // Tuesday 24 Mar 2026
 
 	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
 
@@ -331,9 +276,9 @@ func TestE2E_DiaryWeekStartsOnMonday(t *testing.T) {
 // TestE2E_WeekNavigation verifies that Prev/Next week buttons update the
 // week label and reload entries.
 func TestE2E_WeekNavigation(t *testing.T) {
-	srv := newE2EServer(t)
+	serverURL := newE2EServer(t)
 	_, page := newPage(t, "alice")
-	page.MustNavigate(srv.URL)
+	page.MustNavigate(serverURL)
 
 	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
 

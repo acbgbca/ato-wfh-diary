@@ -9,7 +9,7 @@ Follow this workflow:
 1. Get a list of open issues in GitHub. Display the summaries to the user, and ask them which issue we should be implementing
 2. Load the full description of the issue. Ensure that you understand what is being built, and the changes that need to be made. Ask questions if anything isn't clear
 3. Explore the local repository, and verify that the proposed solution will work and that there are no gaps. If anything isn't clear, ask the user.
-4. Once everything is confirmed, create a feature branch for the change, including the Github issue number in the name
+4. Once everything is confirmed, make sure we are on the main branch and run `git pull` to ensure we have the latest changs. Then create a feature branch for the change, including the Github issue number in the name
 5. Use a TDD approach by writing or update the tests first, and adding just enough code so the tests compile but fail. Include E2E tests if the UI is affected
 6. Implement the changes
 7. Update docs/ (features.md for behaviour changes, data_model.md for schema changes)

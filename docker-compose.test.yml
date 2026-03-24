@@ -1,0 +1,20 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      # Use port 18080 to avoid conflicts with a production compose stack on 8080.
+      - "18080:8080"
+    volumes:
+      # Long-form tmpfs with explicit mode 01777 (world-writable + sticky bit) so
+      # the non-root app user (UID 1001) can create the database file in /data.
+      # The short-form `tmpfs: [/data]` does not guarantee this mode, which causes
+      # the app to crash on startup with a permission error.
+      - type: tmpfs
+        target: /data
+        tmpfs:
+          mode: 01777
+    environment:
+      - DB_PATH=/data/wfh.db
+      - FORWARD_AUTH_HEADER=X-Forwarded-User
