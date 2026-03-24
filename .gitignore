@@ -11,3 +11,4 @@ backend/frontend/*.js
 backend/frontend/css/
 backend/frontend/js/
 backend/frontend/icons/
+backend/server
