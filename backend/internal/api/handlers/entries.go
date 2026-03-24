@@ -64,13 +64,16 @@ func (h *Handler) GetFirstIncompleteWeek(w http.ResponseWriter, r *http.Request)
 	respondJSON(w, map[string]any{"week_start": weekStart})
 }
 
-// firstMondayOfFY returns the first Monday on or after July 1 of the financial
-// year that starts in (financialYear - 1). e.g. FY2026 → first Monday ≥ 1 Jul 2025.
+// firstMondayOfFY returns the Monday of the week containing July 1 of the
+// financial year that starts in (financialYear - 1).
+// e.g. FY2026 → Jul 1 2025 is a Tuesday → returns Mon 30 Jun 2025.
 func firstMondayOfFY(financialYear int) time.Time {
 	jul1 := time.Date(financialYear-1, time.July, 1, 0, 0, 0, 0, time.UTC)
 	dow := int(jul1.Weekday())
-	daysUntilMonday := (8 - dow) % 7
-	return jul1.AddDate(0, 0, daysUntilMonday)
+	if dow == 0 {
+		dow = 7
+	}
+	return jul1.AddDate(0, 0, 1-dow)
 }
 
 // entryRequest is the JSON shape accepted when upserting entries.
