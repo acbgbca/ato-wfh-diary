@@ -75,7 +75,35 @@ Each user can optionally configure a profile via the **Settings** page. The prof
 
 - Reports can be exported for use in tax preparation
 - **CSV export** is supported: includes a summary header block (user, financial year, total hours) followed by a detail table of all WFH entries
-- PDF export is not currently implemented
+
+### Print PDF (calendar view)
+
+Clicking **Print PDF** opens a browser print dialog pre-loaded with a formatted A4 calendar document. PDF generation is entirely browser-side — no server-side PDF library is used.
+
+**Layout:**
+- Report header: user display name, financial year range, and total WFH hours
+- 12 monthly sections (July → June), each containing:
+  - Month heading with the month's total WFH hours
+  - Mon–Sun 7-column calendar grid
+  - Each day cell shows: day number, abbreviated day-type label, and (for WFH/part-WFH days) hours worked
+- Days outside the current month are left blank
+- Days with no recorded entry show only the day number
+- WFH/part-WFH cells are lightly highlighted green; weekend cells are muted grey (both render clearly in greyscale)
+- `page-break-inside: avoid` on each month section; months flow naturally across approximately 3–4 A4 pages
+
+**Day type abbreviations used in cells:**
+
+| Day type | Label |
+|----------|-------|
+| `wfh` | WFH |
+| `part_wfh` | Part WFH |
+| `office` | Office |
+| `annual_leave` | Leave |
+| `sick_leave` | Sick |
+| `public_holiday` | P.Hol |
+| `weekend` | Wkd |
+
+**API change:** `GET /api/users/{id}/report` now includes an `all_entries` array alongside the existing `entries` array. `entries` remains WFH/part-WFH only (backwards compatible); `all_entries` contains every entry for the financial year, used to populate the calendar grid.
 
 ## Frontend
 
@@ -146,6 +174,7 @@ The application is installable as a PWA on supported browsers and devices:
 - A **summary block** shows the selected user's name, financial year range, and total WFH hours
 - A **detail table** lists every WFH entry (date, type, hours, notes)
 - **Export CSV** downloads the report as a CSV file via the backend export endpoint
+- **Print PDF** opens a print dialog with a formatted A4 calendar view of the full financial year (see Print PDF section above)
 
 ## Push Notifications
 

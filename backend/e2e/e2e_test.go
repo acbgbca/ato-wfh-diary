@@ -4,6 +4,7 @@ package e2e_test
 
 import (
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
+	"github.com/go-rod/rod/lib/proto"
 )
 
 // newE2EServer starts a test HTTP server with a real in-memory SQLite database
@@ -259,6 +261,70 @@ func TestE2E_WeekDefaults_FromProfile(t *testing.T) {
 	wedHours := rows[2].MustElement(".hours-input").MustProperty("value").Str()
 	if wedHours != "" {
 		t.Errorf("wednesday hours: got %q, want empty", wedHours)
+	}
+}
+
+// TestE2E_PrintPDFButton verifies the Print PDF button is present in the
+// report view and is clickable without errors.
+func TestE2E_PrintPDFButton(t *testing.T) {
+	srv := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(srv.URL)
+
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Navigate to Report view.
+	page.MustElement("#nav-report").MustClick()
+	waitFor(t, page, `() => !document.getElementById('view-report').hidden`)
+	waitFor(t, page, `() => document.getElementById('report-summary').textContent.includes('Total')`)
+
+	// Print PDF button must exist.
+	btn := page.MustElement("#print-pdf")
+	visible, err := btn.Visible()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !visible {
+		t.Error("print-pdf button should be visible in the report view")
+	}
+}
+
+// TestE2E_DiaryWeekStartsOnMonday verifies that the diary week always starts on
+// Monday regardless of timezone. The browser is set to Australia/Melbourne
+// (UTC+11 in March) to reproduce a bug where formatDate() used toISOString()
+// (UTC) causing midnight local time to appear as the previous day.
+// Uses a known Tuesday (2026-03-24) via the ?week= query param.
+// Expected: week label starts "Mon" and first row data-date is "2026-03-23".
+func TestE2E_DiaryWeekStartsOnMonday(t *testing.T) {
+	srv := newE2EServer(t)
+	_, page := newPage(t, "alice")
+
+	// Emulate Australian Eastern time (UTC+11 in March) — at this offset,
+	// midnight local time is 1pm the previous day in UTC, which caused
+	// formatDate(weekStart) to return Sunday instead of Monday.
+	tz := proto.EmulationSetTimezoneOverride{TimezoneID: "Australia/Melbourne"}
+	if err := tz.Call(page); err != nil {
+		t.Fatalf("set timezone override: %v", err)
+	}
+
+	page.MustNavigate(srv.URL + "?week=2026-03-24") // Tuesday 24 Mar 2026
+
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Week label should open with "Mon"
+	label := page.MustElement("#week-label").MustText()
+	if !strings.HasPrefix(label, "Mon") {
+		t.Errorf("week label should start with Mon (Monday), got %q", label)
+	}
+
+	// First row data-date should be the Monday of that week (2026-03-23)
+	rows := page.MustElements("#entry-tbody tr.day-row")
+	firstDate, err := rows[0].Attribute("data-date")
+	if err != nil || firstDate == nil {
+		t.Fatal("could not read data-date from first row")
+	}
+	if *firstDate != "2026-03-23" {
+		t.Errorf("first row date: got %q, want 2026-03-23", *firstDate)
 	}
 }
 

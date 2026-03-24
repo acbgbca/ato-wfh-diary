@@ -236,3 +236,62 @@ func TestExportReport_UserNotFound(t *testing.T) {
 		t.Errorf("status: got %d, want %d", resp.StatusCode, http.StatusNotFound)
 	}
 }
+
+func TestGetReport_IncludesAllEntries(t *testing.T) {
+	srv := newTestServer(t)
+	userID := mustCreateUser(t, srv, "alice")
+
+	seedEntries(t, srv, userID, []map[string]any{
+		{"entry_date": "2024-08-01", "day_type": "wfh", "hours": 8},
+		{"entry_date": "2024-08-02", "day_type": "office", "hours": 0},
+		{"entry_date": "2024-08-03", "day_type": "annual_leave", "hours": 0},
+	})
+
+	resp := do(t, srv, http.MethodGet,
+		fmt.Sprintf("/api/users/%d/report?financial_year=2025", userID),
+		"alice", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	var report map[string]any
+	decodeJSON(t, resp, &report)
+
+	// entries (WFH only) should have 1 entry
+	if len(report["entries"].([]any)) != 1 {
+		t.Errorf("entries: got %d, want 1 (WFH only)", len(report["entries"].([]any)))
+	}
+
+	// all_entries should have all 3 entries
+	allEntries, ok := report["all_entries"].([]any)
+	if !ok {
+		t.Fatalf("all_entries field missing or wrong type in response")
+	}
+	if len(allEntries) != 3 {
+		t.Errorf("all_entries: got %d, want 3 (all day types)", len(allEntries))
+	}
+}
+
+func TestGetReport_AllEntriesEmptyWhenNoData(t *testing.T) {
+	srv := newTestServer(t)
+	userID := mustCreateUser(t, srv, "alice")
+
+	resp := do(t, srv, http.MethodGet,
+		fmt.Sprintf("/api/users/%d/report?financial_year=2025", userID),
+		"alice", nil)
+
+	var report map[string]any
+	decodeJSON(t, resp, &report)
+
+	allEntries, ok := report["all_entries"].([]any)
+	if !ok {
+		// nil slice marshalled as null — treat as empty
+		if report["all_entries"] != nil {
+			t.Fatalf("all_entries: unexpected value %v", report["all_entries"])
+		}
+		return
+	}
+	if len(allEntries) != 0 {
+		t.Errorf("all_entries: got %d, want 0", len(allEntries))
+	}
+}

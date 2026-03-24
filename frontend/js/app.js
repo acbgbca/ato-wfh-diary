@@ -15,7 +15,12 @@ const WFH_TYPES = new Set(['wfh', 'part_wfh']);
 const isWFH = t => WFH_TYPES.has(t);
 
 // ── Date utilities ─────────────────────────────────────────────────────────
-const formatDate = d => d.toISOString().slice(0, 10);
+const formatDate = d => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
 function getMonday(date) {
   const d = new Date(date);
@@ -62,7 +67,7 @@ const WEEK_DAYS = [
 ];
 
 // ── App state ──────────────────────────────────────────────────────────────
-let me, allUsers, selectedUserId, weekStart, view, reportFY, userProfile;
+let me, allUsers, selectedUserId, weekStart, view, reportFY, userProfile, currentReport;
 
 // PWA install prompt captured from the beforeinstallprompt event.
 let installPrompt = null;
@@ -142,6 +147,7 @@ function bindEvents() {
 
   on('fy-select',   'change', e => { reportFY = parseInt(e.target.value, 10); loadReport(); });
   on('export-csv',  'click',  () => { window.location.href = api.exportURL(selectedUserId, reportFY); });
+  on('print-pdf',   'click',  printReport);
   on('save-profile', 'click', saveProfile);
 
   on('notif-enabled', 'change', e => {
@@ -439,7 +445,8 @@ function clearProfileStatus() {
 // ── Report ─────────────────────────────────────────────────────────────────
 async function loadReport() {
   try {
-    const report = await api.getReport(selectedUserId, reportFY);
+    currentReport = await api.getReport(selectedUserId, reportFY);
+    const report = currentReport;
 
     document.getElementById('report-summary').innerHTML =
       `<p><strong>${escapeHTML(report.display_name)}</strong> &nbsp;&middot;&nbsp; ` +
@@ -463,6 +470,153 @@ async function loadReport() {
     document.getElementById('report-summary').innerHTML =
       `<p class="error">${escapeHTML(e.message)}</p>`;
   }
+}
+
+// ── PDF / Print ────────────────────────────────────────────────────────────
+
+// Abbreviated labels used in calendar cells.
+const CELL_LABELS = {
+  wfh:            'WFH',
+  part_wfh:       'Part WFH',
+  office:         'Office',
+  annual_leave:   'Leave',
+  sick_leave:     'Sick',
+  public_holiday: 'P.Hol',
+  weekend:        'Wkd',
+};
+
+function generateReportHTML(report) {
+  const fy   = report.financial_year;
+  const name = report.display_name;
+  const totalHrs = (+report.total_hours).toFixed(2);
+
+  // Build a lookup map: 'YYYY-MM-DD' → entry
+  const byDate = {};
+  (report.all_entries ?? []).forEach(e => { byDate[e.entry_date] = e; });
+
+  // Financial year months: Jul (fy-1) through Jun (fy)
+  const months = [];
+  for (let m = 0; m < 12; m++) {
+    const year  = m < 6 ? fy - 1 : fy;      // Jul–Dec = fy-1, Jan–Jun = fy
+    const month = m < 6 ? 6 + m : m - 6;    // 0-based month index
+    months.push({ year, month });
+  }
+
+  const MONTH_NAMES = ['January','February','March','April','May','June',
+                       'July','August','September','October','November','December'];
+
+  function buildMonthGrid(year, month) {
+    // Total WFH hours this month
+    let monthTotal = 0;
+    const firstDay = new Date(year, month, 1);
+    const lastDay  = new Date(year, month + 1, 0).getDate();
+
+    // day-of-week of 1st (0=Sun…6=Sat), convert to Mon-origin (0=Mon…6=Sun)
+    const startDow = (firstDay.getDay() + 6) % 7;
+
+    // Build cells
+    const cells = [];
+    // Leading empty cells
+    for (let i = 0; i < startDow; i++) cells.push(null);
+
+    for (let d = 1; d <= lastDay; d++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const entry   = byDate[dateStr] ?? null;
+      if (entry && (entry.day_type === 'wfh' || entry.day_type === 'part_wfh')) {
+        monthTotal += +entry.hours;
+      }
+      cells.push({ d, entry });
+    }
+
+    // Pad to complete last row
+    while (cells.length % 7 !== 0) cells.push(null);
+
+    // Build rows
+    let rows = '';
+    for (let r = 0; r < cells.length; r += 7) {
+      const week = cells.slice(r, r + 7);
+      rows += '<tr>' + week.map(cell => {
+        if (!cell) return '<td class="cal-empty"></td>';
+        const { d, entry } = cell;
+        const dt   = entry?.day_type ?? '';
+        const hrs  = entry && (dt === 'wfh' || dt === 'part_wfh') ? (+entry.hours).toFixed(2) : '';
+        const lbl  = dt ? CELL_LABELS[dt] ?? dt : '';
+        const cls  = dt === 'wfh' || dt === 'part_wfh' ? 'cal-wfh'
+                   : dt === 'weekend'                   ? 'cal-wkd'
+                   : '';
+        const typeHrs = lbl && hrs ? `${escapeHTML(lbl)} - ${hrs}` : lbl ? escapeHTML(lbl) : '';
+        return `<td class="cal-day ${cls}">
+          <span class="cal-num">${d}</span>
+          ${typeHrs ? `<span class="cal-type">${typeHrs}</span>` : ''}
+        </td>`;
+      }).join('') + '</tr>';
+    }
+
+    return { rows, monthTotal };
+  }
+
+  let monthSections = '';
+  months.forEach(({ year, month }) => {
+    const { rows, monthTotal } = buildMonthGrid(year, month);
+    monthSections += `
+      <div class="month-block">
+        <div class="month-header">
+          <span class="month-name">${MONTH_NAMES[month]} ${year}</span>
+          <span class="month-total">Total: ${monthTotal.toFixed(2)} hrs</span>
+        </div>
+        <table class="cal-table">
+          <thead><tr>
+            <th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  });
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>WFH Report — ${escapeHTML(name)} — FY${fy}</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 10px; margin: 10mm; color: #000; }
+  h1   { font-size: 14px; margin: 0 0 2px; }
+  .subtitle { font-size: 11px; margin: 0 0 6px; color: #444; }
+  .month-block { page-break-inside: avoid; margin-bottom: 8mm; }
+  .month-header { display: flex; justify-content: space-between; align-items: baseline;
+                  border-bottom: 1px solid #333; margin-bottom: 2px; padding-bottom: 2px; }
+  .month-name  { font-weight: bold; font-size: 11px; }
+  .month-total { font-size: 10px; }
+  .cal-table   { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .cal-table th { background: #eee; border: 1px solid #ccc; text-align: center;
+                  padding: 2px; font-size: 9px; }
+  .cal-table td { border: 1px solid #ddd; vertical-align: top; height: 7mm;
+                  padding: 2px; width: 14.28%; }
+  .cal-empty   { background: #f9f9f9; }
+  .cal-wfh     { background: #e6f4ea; }
+  .cal-wkd     { background: #f5f5f5; color: #888; }
+  .cal-num     { display: block; font-weight: bold; font-size: 9px; }
+  .cal-type    { display: block; font-size: 8px; }
+  @media print { @page { size: A4 portrait; margin: 10mm; } body { margin: 0; } }
+</style>
+</head>
+<body>
+<h1>WFH Report — ${escapeHTML(name)}</h1>
+<p class="subtitle">FY${fy} (1 Jul ${fy - 1} – 30 Jun ${fy}) &nbsp;·&nbsp; Total WFH hours: <strong>${totalHrs}</strong></p>
+${monthSections}
+</body>
+</html>`;
+}
+
+function printReport() {
+  if (!currentReport) return;
+  const html = generateReportHTML(currentReport);
+  const win  = window.open('', '_blank');
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  win.print();
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────

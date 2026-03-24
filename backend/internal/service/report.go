@@ -11,10 +11,13 @@ type ReportSummary struct {
 	FinancialYear int                  `json:"financial_year"`
 	TotalHours    float64              `json:"total_hours"`
 	Entries       []model.WorkDayEntry `json:"entries"`
+	AllEntries    []model.WorkDayEntry `json:"all_entries"`
 }
 
-// BuildReport aggregates a slice of WFH entries into a report summary.
-func BuildReport(userID int64, financialYear int, entries []model.WorkDayEntry) ReportSummary {
+// BuildReport aggregates WFH entries into a report summary.
+// entries contains only wfh/part_wfh entries (used for totals).
+// allEntries contains every entry for the financial year (used for the calendar PDF).
+func BuildReport(userID int64, financialYear int, entries []model.WorkDayEntry, allEntries []model.WorkDayEntry) ReportSummary {
 	var total float64
 	for _, e := range entries {
 		total += e.Hours
@@ -24,6 +27,7 @@ func BuildReport(userID int64, financialYear int, entries []model.WorkDayEntry) 
 		FinancialYear: financialYear,
 		TotalHours:    total,
 		Entries:       entries,
+		AllEntries:    allEntries,
 	}
 }
 

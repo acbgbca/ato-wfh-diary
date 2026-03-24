@@ -15,6 +15,7 @@ type reportResponse struct {
 	FinancialYear int             `json:"financial_year"`
 	TotalHours    float64         `json:"total_hours"`
 	Entries       []entryResponse `json:"entries"`
+	AllEntries    []entryResponse `json:"all_entries"`
 }
 
 // GetReport returns the WFH report for a user and financial year.
@@ -49,7 +50,13 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	summary := service.BuildReport(userID, fy, entries)
+	allEntries, err := h.Store.GetFYAllEntries(r.Context(), userID, fy)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "could not retrieve all entries")
+		return
+	}
+
+	summary := service.BuildReport(userID, fy, entries, allEntries)
 
 	resp := reportResponse{
 		UserID:        userID,
@@ -57,9 +64,13 @@ func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 		FinancialYear: fy,
 		TotalHours:    summary.TotalHours,
 		Entries:       make([]entryResponse, len(entries)),
+		AllEntries:    make([]entryResponse, len(allEntries)),
 	}
 	for i, e := range entries {
 		resp.Entries[i] = toEntryResponse(e)
+	}
+	for i, e := range allEntries {
+		resp.AllEntries[i] = toEntryResponse(e)
 	}
 	respondJSON(w, resp)
 }
@@ -106,7 +117,7 @@ func (h *Handler) ExportReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	summary := service.BuildReport(userID, fy, entries)
+	summary := service.BuildReport(userID, fy, entries, nil)
 
 	filename := fmt.Sprintf("wfh-report-fy%d-%s.csv", fy, user.Username)
 	w.Header().Set("Content-Type", "text/csv")
