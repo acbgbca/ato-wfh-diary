@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	webpush "github.com/SherClockHolmes/webpush-go"
 )
 
 const testAuthHeader = "X-Test-User"
@@ -25,7 +27,11 @@ func newTestServer(t *testing.T) *httptest.Server {
 	}
 
 	store := db.NewStore(database)
-	h := handlers.New(store)
+	_, publicKey, err := webpush.GenerateVAPIDKeys()
+	if err != nil {
+		t.Fatalf("generate vapid keys: %v", err)
+	}
+	h := handlers.NewWithConfig(store, publicKey, "Australia/Melbourne")
 	router := handlers.NewRouter(h, testAuthHeader, nil)
 
 	srv := httptest.NewServer(router)

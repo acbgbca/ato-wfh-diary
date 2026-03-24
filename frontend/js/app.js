@@ -64,12 +64,25 @@ const WEEK_DAYS = [
 // ── App state ──────────────────────────────────────────────────────────────
 let me, allUsers, selectedUserId, weekStart, view, reportFY, userProfile;
 
+// PWA install prompt captured from the beforeinstallprompt event.
+let installPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  installPrompt = e;
+  // If settings view is already showing, reveal the install button.
+  const btn = document.getElementById('notif-install-btn');
+  if (btn) btn.hidden = false;
+});
+
 // ── Initialisation ─────────────────────────────────────────────────────────
 async function init() {
   try {
     [me, allUsers] = await Promise.all([api.getMe(), api.getUsers()]);
     selectedUserId = me.id;
-    weekStart = getMonday(new Date());
+
+    // Navigate to a specific week if ?week= is set (e.g. from a notification click).
+    const weekParam = new URLSearchParams(window.location.search).get('week');
+    weekStart = weekParam ? getMonday(new Date(weekParam + 'T00:00:00')) : getMonday(new Date());
     view = 'diary';
     reportFY = defaultFY();
 
@@ -130,6 +143,17 @@ function bindEvents() {
   on('fy-select',   'change', e => { reportFY = parseInt(e.target.value, 10); loadReport(); });
   on('export-csv',  'click',  () => { window.location.href = api.exportURL(selectedUserId, reportFY); });
   on('save-profile', 'click', saveProfile);
+
+  on('notif-enabled', 'change', e => {
+    document.getElementById('notif-schedule').hidden = !e.target.checked;
+  });
+  on('save-notif', 'click', saveNotificationPrefs);
+  on('notif-install-btn', 'click', async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice;
+    installPrompt = null;
+  });
 
   // Toggle hours field when day type changes
   document.getElementById('entry-tbody').addEventListener('change', e => {
@@ -279,13 +303,103 @@ function loadSettings() {
   if (!userProfile) {
     document.getElementById('profile-sat-type').value = 'weekend';
     document.getElementById('profile-sun-type').value = 'weekend';
+  } else {
+    document.getElementById('profile-default-hours').value = userProfile.default_hours;
+    WEEK_DAYS.forEach(({ key }) => {
+      const el = document.getElementById(`profile-${key.replace('_type', '-type')}`);
+      if (el) el.value = userProfile[key];
+    });
+  }
+  loadNotificationSettings();
+}
+
+async function loadNotificationSettings() {
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+
+  if (!isStandalone) {
+    document.getElementById('notif-install-prompt').hidden = false;
+    document.getElementById('notif-pwa-section').hidden = true;
+    // Show install button only if a prompt is available.
+    document.getElementById('notif-install-btn').hidden = !installPrompt;
     return;
   }
-  document.getElementById('profile-default-hours').value = userProfile.default_hours;
-  WEEK_DAYS.forEach(({ key }) => {
-    const el = document.getElementById(`profile-${key.replace('_type', '-type')}`);
-    if (el) el.value = userProfile[key];
+
+  document.getElementById('notif-install-prompt').hidden = true;
+  document.getElementById('notif-pwa-section').hidden = false;
+
+  try {
+    const prefs = await api.getNotificationPrefs();
+    document.getElementById('notif-enabled').checked = prefs.enabled;
+    document.getElementById('notif-schedule').hidden = !prefs.enabled;
+    document.getElementById('notif-day').value = String(prefs.notify_day);
+    document.getElementById('notif-time').value = prefs.notify_time;
+  } catch (e) {
+    setNotifStatus('Could not load notification settings', true);
+  }
+}
+
+async function saveNotificationPrefs() {
+  const enabled = document.getElementById('notif-enabled').checked;
+  const notifyDay = parseInt(document.getElementById('notif-day').value, 10);
+  const notifyTime = document.getElementById('notif-time').value;
+
+  try {
+    if (enabled) {
+      // Request permission and subscribe if not already subscribed.
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        setNotifStatus('Notification permission denied', true);
+        return;
+      }
+      await ensurePushSubscription();
+    }
+
+    await api.saveNotificationPrefs({ enabled, notify_day: notifyDay, notify_time: notifyTime });
+    setNotifStatus('Saved', false);
+    setTimeout(clearNotifStatus, 3000);
+  } catch (e) {
+    setNotifStatus(e.message, true);
+  }
+}
+
+// Ensures a Web Push subscription exists for this browser and is registered
+// with the server. Does nothing if already subscribed.
+async function ensurePushSubscription() {
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    const { vapid_public_key: vapidKey } = await api.getVapidKey();
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey),
+    });
+  }
+  const json = sub.toJSON();
+  await api.subscribeNotifications({
+    endpoint:   json.endpoint,
+    p256dh_key: json.keys.p256dh,
+    auth_key:   json.keys.auth,
   });
+}
+
+// Converts a URL-safe base64 string to a Uint8Array for the Push API.
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+function setNotifStatus(msg, isError) {
+  const el = document.getElementById('notif-status');
+  el.textContent = msg;
+  el.className = 'save-msg ' + (isError ? 'error' : 'success');
+}
+
+function clearNotifStatus() {
+  const el = document.getElementById('notif-status');
+  el.textContent = '';
+  el.className = 'save-msg';
 }
 
 async function saveProfile() {

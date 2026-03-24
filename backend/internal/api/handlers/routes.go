@@ -25,6 +25,12 @@ func NewRouter(h *Handler, authHeader string, frontendFS fs.FS) http.Handler {
 	mux.Handle("GET /api/users/{id}/report", auth(http.HandlerFunc(h.GetReport)))
 	mux.Handle("GET /api/users/{id}/report/export", auth(http.HandlerFunc(h.ExportReport)))
 
+	mux.Handle("GET /api/notifications/vapid-key", auth(http.HandlerFunc(h.GetVapidKey)))
+	mux.Handle("GET /api/notifications/prefs", auth(http.HandlerFunc(h.GetNotificationPrefs)))
+	mux.Handle("PUT /api/notifications/prefs", auth(http.HandlerFunc(h.PutNotificationPrefs)))
+	mux.Handle("POST /api/notifications/subscribe", auth(http.HandlerFunc(h.PostSubscribe)))
+	mux.Handle("DELETE /api/notifications/subscribe", auth(http.HandlerFunc(h.DeleteSubscribe)))
+
 	if frontendFS != nil {
 		mux.Handle("/", http.FileServerFS(frontendFS))
 	}

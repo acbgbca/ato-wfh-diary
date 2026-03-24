@@ -79,6 +79,52 @@ Optional per-user settings that provide default values when pre-populating an em
 
 ---
 
+### `app_config`
+
+Application-level key/value store for persistent configuration that is generated or derived at runtime. Used to store the auto-generated VAPID key pair so it survives server restarts.
+
+| Column       | Type      | Constraints           | Description                            |
+|--------------|-----------|-----------------------|----------------------------------------|
+| `key`        | TEXT      | PK                    | Config key                             |
+| `value`      | TEXT      | NOT NULL              | Config value                           |
+| `created_at` | DATETIME  | NOT NULL, DEFAULT NOW | Record creation time                   |
+| `updated_at` | DATETIME  | NOT NULL, DEFAULT NOW | Last update time                       |
+
+---
+
+### `user_notification_prefs`
+
+Stores each user's push notification schedule. A row is created on-demand with defaults when the user first visits the Settings page.
+
+| Column           | Type      | Constraints                         | Description                                                                    |
+|------------------|-----------|-------------------------------------|--------------------------------------------------------------------------------|
+| `id`             | INTEGER   | PK, AUTOINCREMENT                   | Internal identifier                                                            |
+| `user_id`        | INTEGER   | NOT NULL, UNIQUE, FK → `users.id`   | One preference row per user                                                    |
+| `enabled`        | INTEGER   | NOT NULL, DEFAULT 0                 | Boolean: 1 = notifications enabled                                             |
+| `notify_day`     | INTEGER   | NOT NULL, DEFAULT 0                 | Day of week to send: 0 = Sunday, 1 = Monday                                   |
+| `notify_time`    | TEXT      | NOT NULL, DEFAULT `17:00`           | Time to send in app timezone (HH:MM)                                           |
+| `next_notify_at` | DATETIME  | NULL                                | Next scheduled send time; scheduler sends when this ≤ now; NULL = not scheduled|
+| `created_at`     | DATETIME  | NOT NULL, DEFAULT NOW               | Record creation time                                                           |
+| `updated_at`     | DATETIME  | NOT NULL, DEFAULT NOW               | Last update time                                                               |
+
+---
+
+### `push_subscriptions`
+
+Holds Web Push API subscription objects, one per user/device. A user who has installed the PWA on multiple devices may have multiple rows.
+
+| Column       | Type      | Constraints                       | Description                                          |
+|--------------|-----------|-----------------------------------|------------------------------------------------------|
+| `id`         | INTEGER   | PK, AUTOINCREMENT                 | Internal identifier                                  |
+| `user_id`    | INTEGER   | NOT NULL, FK → `users.id`         | The user this subscription belongs to                |
+| `endpoint`   | TEXT      | NOT NULL, UNIQUE                  | Push service endpoint URL                            |
+| `p256dh_key` | TEXT      | NOT NULL                          | ECDH public key for payload encryption               |
+| `auth_key`   | TEXT      | NOT NULL                          | Auth secret for payload encryption                   |
+| `created_at` | DATETIME  | NOT NULL, DEFAULT NOW             | Record creation time                                 |
+| `updated_at` | DATETIME  | NOT NULL, DEFAULT NOW             | Last update time                                     |
+
+---
+
 ## SQL Schema
 
 ```sql
@@ -137,6 +183,34 @@ CREATE TABLE user_profiles (
                                CHECK(sun_type IN ('wfh', 'part_wfh', 'office', 'annual_leave', 'sick_leave', 'public_holiday', 'weekend')),
     created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE app_config (
+    key        TEXT     PRIMARY KEY,
+    value      TEXT     NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE user_notification_prefs (
+    id             INTEGER  PRIMARY KEY,
+    user_id        INTEGER  NOT NULL UNIQUE REFERENCES users(id),
+    enabled        INTEGER  NOT NULL DEFAULT 0,
+    notify_day     INTEGER  NOT NULL DEFAULT 0,
+    notify_time    TEXT     NOT NULL DEFAULT '17:00',
+    next_notify_at DATETIME,
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE push_subscriptions (
+    id         INTEGER  PRIMARY KEY,
+    user_id    INTEGER  NOT NULL REFERENCES users(id),
+    endpoint   TEXT     NOT NULL UNIQUE,
+    p256dh_key TEXT     NOT NULL,
+    auth_key   TEXT     NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
 

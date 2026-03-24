@@ -124,6 +124,7 @@ The application is installable as a PWA on supported browsers and devices:
 - **Standard week table**: day type selector for each day of the week (Mon–Sun)
 - **Save Settings** persists the profile; a brief "Saved" confirmation is shown on success
 - On load, the form is populated with the user's current profile (if one exists)
+- **Notifications section** (see Push Notifications below)
 
 #### Report
 
@@ -131,6 +132,77 @@ The application is installable as a PWA on supported browsers and devices:
 - A **summary block** shows the selected user's name, financial year range, and total WFH hours
 - A **detail table** lists every WFH entry (date, type, hours, notes)
 - **Export CSV** downloads the report as a CSV file via the backend export endpoint
+
+## Push Notifications
+
+Users who have installed the app as a PWA can opt in to weekly reminders to fill in their hours.
+
+### Behaviour
+
+- A notification is sent when the user has **fewer than 7 entries** saved for the target week
+- If all 7 entries already exist, the notification is silently skipped and the schedule advances to the following week
+- Clicking the notification opens the app directly to the relevant week
+
+### Schedule
+
+Each user independently configures:
+
+| Setting | Options | Default |
+|---------|---------|---------|
+| **Day** | Sunday or Monday | Sunday |
+| **Time** | Any HH:MM | 17:00 |
+
+- **Sunday**: notification refers to the **current** Mon–Sun week (same week as Sunday)
+- **Monday**: notification refers to the **previous** Mon–Sun week
+
+### Settings UI
+
+The **Notifications** section appears in the Settings view:
+
+- **If the app is running as an installed PWA** (`display-mode: standalone`):
+  - Toggle to enable/disable notifications
+  - When enabled: day selector (Sunday / Monday) and time input
+  - Enabling requests `Notification` permission and creates a Web Push subscription
+- **If the app is not installed as a PWA**:
+  - A message explains that installation is required
+  - An **Install App** button is shown (using the browser's `beforeinstallprompt` event); falls back to a "Add to home screen" message if the prompt is not available
+
+### Deep-link on notification click
+
+Notification payloads include a `week_start` date. The service worker handles `notificationclick` and opens `/?week=YYYY-MM-DD`. On load, the app checks for this query parameter and navigates directly to the specified week.
+
+### Scheduler
+
+A background goroutine runs every `NOTIFICATION_SCHEDULER_INTERVAL` (default `10m`):
+
+1. Queries `user_notification_prefs` for rows where `enabled = 1` AND `next_notify_at ≤ now`
+2. For each matched user, determines the target week and counts entries
+3. If the week is incomplete: sends a Web Push notification to all of the user's subscriptions
+   - Success → advances `next_notify_at` by one week
+   - Failure → logs the error; `next_notify_at` is left unchanged so the attempt is retried on the next tick
+4. If the week is complete: advances `next_notify_at` without sending
+
+### Configuration (environment variables)
+
+| Variable | Default | Description |
+|---|---|---|
+| `NOTIFICATION_TIMEZONE` | `Australia/Melbourne` | IANA timezone used for scheduling |
+| `NOTIFICATION_TITLE` | `WFH Diary` | Push notification title |
+| `NOTIFICATION_BODY` | `Time to log your hours for this week` | Push notification body |
+| `NOTIFICATION_SCHEDULER_INTERVAL` | `10m` | How often the scheduler polls for due notifications |
+| `VAPID_SUBJECT` | `mailto:admin@example.com` | VAPID contact identifier (required by the Web Push spec) |
+
+VAPID keys are auto-generated on first run and stored in the `app_config` database table.
+
+### API
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/notifications/vapid-key` | Returns the VAPID public key for browser subscription |
+| `GET` | `/api/notifications/prefs` | Returns the current user's notification preferences |
+| `PUT` | `/api/notifications/prefs` | Updates the current user's notification preferences; recalculates `next_notify_at` |
+| `POST` | `/api/notifications/subscribe` | Saves or updates a Web Push subscription for the current user |
+| `DELETE` | `/api/notifications/subscribe` | Removes a Web Push subscription by endpoint |
 
 ### E2E Tests
 

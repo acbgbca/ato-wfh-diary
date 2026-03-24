@@ -117,6 +117,36 @@
         <button id="save-profile">Save Settings</button>
         <span id="profile-status" class="save-msg"></span>
       </div>
+
+      <h3>Notifications</h3>
+      <p>Receive a push notification when you have not yet filled in your hours for the week.</p>
+
+      <!-- Shown when the app is NOT running as an installed PWA -->
+      <div id="notif-install-prompt" hidden>
+        <p>Install this app to your home screen to enable push notifications.</p>
+        <button id="notif-install-btn" hidden>Install App</button>
+      </div>
+
+      <!-- Shown when the app IS running as an installed PWA -->
+      <div id="notif-pwa-section" hidden>
+        <label>
+          <input type="checkbox" id="notif-enabled">
+          Enable weekly reminders
+        </label>
+        <div id="notif-schedule" hidden>
+          <label for="notif-day">Remind me on</label>
+          <select id="notif-day">
+            <option value="0">Sunday</option>
+            <option value="1">Monday</option>
+          </select>
+          <label for="notif-time">at</label>
+          <input type="time" id="notif-time" value="17:00" style="max-width:8rem">
+        </div>
+        <div class="save-bar">
+          <button id="save-notif">Save Notification Settings</button>
+          <span id="notif-status" class="save-msg"></span>
+        </div>
+      </div>
     </section>
   </main>
 
