@@ -113,9 +113,11 @@ func newE2EServer(t *testing.T) string {
 	return dockerTestURL
 }
 
-// newPage launches a headless browser page pre-authenticated as username,
-// using the header name expected by the Docker container.
-func newPage(t *testing.T, username string) (*rod.Browser, *rod.Page) {
+// newPage launches a headless browser page pre-authenticated as a user
+// derived from the test name. Using the test name (rather than a shared
+// "alice") isolates each test to its own user in the shared Docker database,
+// preventing saved entries from one test polluting another.
+func newPage(t *testing.T, _ string) (*rod.Browser, *rod.Page) {
 	t.Helper()
 
 	l := launcher.New().Headless(true)
@@ -128,7 +130,7 @@ func newPage(t *testing.T, username string) (*rod.Browser, *rod.Page) {
 	t.Cleanup(func() { browser.MustClose() })
 
 	page := browser.MustPage("")
-	cleanup, err := page.SetExtraHeaders([]string{dockerAuthHeader, username})
+	cleanup, err := page.SetExtraHeaders([]string{dockerAuthHeader, t.Name()})
 	if err != nil {
 		t.Fatalf("set extra headers: %v", err)
 	}
