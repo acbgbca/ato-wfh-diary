@@ -320,6 +320,15 @@ func date(year, month, day int) time.Time {
 }
 
 // seedCompleteWeek inserts all 7 entries for the given Monday in a single call.
+func seedEntry(t *testing.T, s *db.Store, userID int64, d time.Time) {
+	t.Helper()
+	if err := s.UpsertEntries(context.Background(), []model.WorkDayEntry{
+		{UserID: userID, EntryDate: d, DayType: model.DayTypeOffice},
+	}); err != nil {
+		t.Fatalf("seedEntry %s: %v", d.Format("2006-01-02"), err)
+	}
+}
+
 func seedCompleteWeek(t *testing.T, s *db.Store, userID int64, weekMonday time.Time) {
 	t.Helper()
 	entries := make([]model.WorkDayEntry, 7)
@@ -484,6 +493,67 @@ func TestGetFirstIncompleteWeek_DoesNotCheckFutureWeeks(t *testing.T) {
 		t.Errorf("expected nil (week2 is future), got %v", result)
 	}
 	_ = week2
+}
+
+// TestGetFirstIncompleteWeek_CrossFYBoundary checks that the week straddling the
+// FY start (e.g. Mon 30 Jun for FY2026 where Jul 1 is Tuesday) is treated as
+// complete when all days *within* the FY have entries, even though the Monday
+// itself belongs to the previous FY.
+func TestGetFirstIncompleteWeek_CrossFYBoundary(t *testing.T) {
+	s := newTestStore(t)
+	user := seedUser(t, s, "alice", "Alice")
+
+	// FY2026: Jul 1 2025 is Tuesday → first week starts Mon 30 Jun 2025.
+	// Seed entries for the 6 days that fall within FY2026 (Jul 1–6 inclusive).
+	// Jun 30 is FY2025 and is intentionally NOT seeded.
+	fy2026Days := []time.Time{
+		date(2025, 7, 1), date(2025, 7, 2), date(2025, 7, 3),
+		date(2025, 7, 4), date(2025, 7, 5), date(2025, 7, 6),
+	}
+	for _, d := range fy2026Days {
+		seedEntry(t, s, user.ID, d)
+	}
+
+	fromDate := monday(2025, 6, 30) // Mon 30 Jun — firstMondayOfFY(2026)
+	today := date(2025, 7, 6)       // within the same week
+
+	result, err := s.GetFirstIncompleteWeek(context.Background(), user.ID, 2026, fromDate, today)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != nil {
+		t.Errorf("expected nil (all in-FY days complete), got %v", result.Format("2006-01-02"))
+	}
+}
+
+// TestGetFirstIncompleteWeek_CrossFYBoundaryIncomplete checks that the cross-FY
+// first week is returned as incomplete when some in-FY days are missing.
+func TestGetFirstIncompleteWeek_CrossFYBoundaryIncomplete(t *testing.T) {
+	s := newTestStore(t)
+	user := seedUser(t, s, "alice", "Alice")
+
+	// Seed only 5 of the 6 FY2026 days in the first week — missing Jul 6.
+	for _, d := range []time.Time{
+		date(2025, 7, 1), date(2025, 7, 2), date(2025, 7, 3),
+		date(2025, 7, 4), date(2025, 7, 5),
+	} {
+		seedEntry(t, s, user.ID, d)
+	}
+
+	fromDate := monday(2025, 6, 30)
+	today := date(2025, 7, 6)
+
+	result, err := s.GetFirstIncompleteWeek(context.Background(), user.ID, 2026, fromDate, today)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected the cross-FY week to be returned as incomplete, got nil")
+	}
+	got := result.Format("2006-01-02")
+	if got != "2025-06-30" {
+		t.Errorf("got %q, want 2025-06-30", got)
+	}
 }
 
 func TestGetFirstIncompleteWeek_IsolatedByUser(t *testing.T) {

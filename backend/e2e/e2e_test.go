@@ -443,9 +443,11 @@ func TestE2E_SmartInit_LoadsFirstIncompleteWeek(t *testing.T) {
 	serverURL := newE2EServer(t)
 	_, page := newPage(t, "alice")
 
-	// Get user ID and seed complete weeks for the first 2 weeks of FY2026:
-	// 2025-07-07 and 2025-07-14 are complete; 2025-07-21 is incomplete.
+	// Get user ID and seed complete weeks for the first 3 weeks of FY2026.
+	// FY2026 starts on the week of Mon 30 Jun 2025 (the week containing Jul 1).
+	// 2025-06-30, 2025-07-07 and 2025-07-14 are complete; 2025-07-21 is incomplete.
 	userID := getUserID(t, serverURL, "alice")
+	seedWeekEntries(t, serverURL, "alice", userID, "2025-06-30")
 	seedWeekEntries(t, serverURL, "alice", userID, "2025-07-07")
 	seedWeekEntries(t, serverURL, "alice", userID, "2025-07-14")
 	// 2025-07-21 is left incomplete
