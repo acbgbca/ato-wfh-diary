@@ -37,6 +37,18 @@
   font-size: 0.9rem;
 }
 
+.week-status.success { color: var(--pico-color-jade-550, #2d8a4e); font-weight: bold; }
+
+/* ── Week label flash animation (fires on every week change) ───────────────── */
+@keyframes week-label-flash {
+  0%   { color: var(--pico-primary, #1095c1); }
+  100% { color: inherit; }
+}
+
+.week-label-flash {
+  animation: week-label-flash 0.7s ease-out;
+}
+
 /* ── Entry table ───────────────────────────────────────────────────────────── */
 .table-wrapper {
   overflow-x: auto;

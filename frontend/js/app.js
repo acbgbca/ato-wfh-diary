@@ -68,6 +68,8 @@ const WEEK_DAYS = [
 
 // ── App state ──────────────────────────────────────────────────────────────
 let me, allUsers, selectedUserId, weekStart, view, reportFY, userProfile, currentReport;
+let weekEntryCount = 0;   // track last-loaded entry count for restoring week-status
+let statusTimeout  = null; // pending clearStatus timer
 
 // PWA install prompt captured from the beforeinstallprompt event.
 let installPrompt = null;
@@ -285,15 +287,13 @@ async function loadWeek({ keepStatus = false } = {}) {
     tbody.appendChild(notesRow);
   });
 
-  // Update week status indicator
-  const statusEl = document.getElementById('week-status');
-  if (entries.length >= 7) {
-    statusEl.textContent = '🟢 Week submitted';
-    statusEl.className = 'week-status submitted';
-  } else {
-    statusEl.textContent = '🔴 Week not submitted';
-    statusEl.className = 'week-status not-submitted';
-  }
+  weekEntryCount = entries.length;
+
+  // Animate the week label so the week change is obvious
+  const labelEl = document.getElementById('week-label');
+  labelEl.classList.remove('week-label-flash');
+  void labelEl.offsetWidth; // force reflow to restart animation
+  labelEl.classList.add('week-label-flash');
 
   if (!keepStatus) clearStatus();
 }
@@ -324,8 +324,6 @@ async function saveWeek() {
 
   try {
     await api.saveEntries(selectedUserId, entries);
-    setStatus('Saved', false);
-    setTimeout(clearStatus, 3000);
 
     // Auto-advance: if the saved week is before the current week, navigate
     // to the next incomplete week (or fall back to the current week).
@@ -341,6 +339,18 @@ async function saveWeek() {
       }
       await loadWeek({ keepStatus: true });
     }
+
+    // Scroll to top so the user sees the week heading and the Saved confirmation.
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // Show "Saved" in the week-status bar (top of diary section) and in the
+    // save-bar span so existing tests continue to pass.
+    setStatus('Saved', false);
+    document.getElementById('week-status').textContent = '✓ Saved';
+    document.getElementById('week-status').className = 'week-status success';
+
+    if (statusTimeout) clearTimeout(statusTimeout);
+    statusTimeout = setTimeout(clearStatus, 3000);
   } catch (e) {
     setStatus(e.message, true);
   }
@@ -356,6 +366,19 @@ function clearStatus() {
   const el = document.getElementById('save-status');
   el.textContent = '';
   el.className = 'save-msg';
+  // Restore the week-status indicator to submitted / not-submitted.
+  renderWeekStatus(weekEntryCount);
+}
+
+function renderWeekStatus(count) {
+  const el = document.getElementById('week-status');
+  if (count >= 7) {
+    el.textContent = '🟢 Week submitted';
+    el.className = 'week-status submitted';
+  } else {
+    el.textContent = '🔴 Week not submitted';
+    el.className = 'week-status not-submitted';
+  }
 }
 
 // ── Settings ───────────────────────────────────────────────────────────────
