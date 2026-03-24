@@ -262,6 +262,31 @@ func TestE2E_WeekDefaults_FromProfile(t *testing.T) {
 	}
 }
 
+// TestE2E_PrintPDFButton verifies the Print PDF button is present in the
+// report view and is clickable without errors.
+func TestE2E_PrintPDFButton(t *testing.T) {
+	srv := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(srv.URL)
+
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Navigate to Report view.
+	page.MustElement("#nav-report").MustClick()
+	waitFor(t, page, `() => !document.getElementById('view-report').hidden`)
+	waitFor(t, page, `() => document.getElementById('report-summary').textContent.includes('Total')`)
+
+	// Print PDF button must exist.
+	btn := page.MustElement("#print-pdf")
+	visible, err := btn.Visible()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !visible {
+		t.Error("print-pdf button should be visible in the report view")
+	}
+}
+
 // TestE2E_WeekNavigation verifies that Prev/Next week buttons update the
 // week label and reload entries.
 func TestE2E_WeekNavigation(t *testing.T) {
