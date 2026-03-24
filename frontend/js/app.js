@@ -539,10 +539,10 @@ function generateReportHTML(report) {
         const cls  = dt === 'wfh' || dt === 'part_wfh' ? 'cal-wfh'
                    : dt === 'weekend'                   ? 'cal-wkd'
                    : '';
+        const typeHrs = lbl && hrs ? `${escapeHTML(lbl)} - ${hrs}` : lbl ? escapeHTML(lbl) : '';
         return `<td class="cal-day ${cls}">
           <span class="cal-num">${d}</span>
-          ${lbl ? `<span class="cal-type">${escapeHTML(lbl)}</span>` : ''}
-          ${hrs  ? `<span class="cal-hrs">${hrs}</span>` : ''}
+          ${typeHrs ? `<span class="cal-type">${typeHrs}</span>` : ''}
         </td>`;
       }).join('') + '</tr>';
     }
@@ -585,14 +585,13 @@ function generateReportHTML(report) {
   .cal-table   { width: 100%; border-collapse: collapse; table-layout: fixed; }
   .cal-table th { background: #eee; border: 1px solid #ccc; text-align: center;
                   padding: 2px; font-size: 9px; }
-  .cal-table td { border: 1px solid #ddd; vertical-align: top; height: 14mm;
+  .cal-table td { border: 1px solid #ddd; vertical-align: top; height: 7mm;
                   padding: 2px; width: 14.28%; }
   .cal-empty   { background: #f9f9f9; }
   .cal-wfh     { background: #e6f4ea; }
   .cal-wkd     { background: #f5f5f5; color: #888; }
   .cal-num     { display: block; font-weight: bold; font-size: 9px; }
   .cal-type    { display: block; font-size: 8px; }
-  .cal-hrs     { display: block; font-size: 8px; color: #1a6b2e; }
   @media print { @page { size: A4 portrait; margin: 10mm; } body { margin: 0; } }
 </style>
 </head>
