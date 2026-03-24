@@ -23,3 +23,20 @@ self.addEventListener('fetch', e => {
     caches.match(e.request).then(cached => cached || fetch(e.request))
   );
 });
+
+self.addEventListener('push', e => {
+  const data = e.data ? e.data.json() : {};
+  const title = data.title || 'WFH Diary';
+  const options = {
+    body: data.body || 'Time to log your hours for this week',
+    data: { weekStart: data.week_start },
+  };
+  e.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const weekStart = e.notification.data && e.notification.data.weekStart;
+  const url = weekStart ? `/?week=${weekStart}` : '/';
+  e.waitUntil(clients.openWindow(url));
+});

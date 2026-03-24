@@ -53,6 +53,51 @@ const api = {
   exportURL(userId, fy) {
     return `/api/users/${userId}/report/export?financial_year=${fy}&format=csv`;
   },
+
+  getVapidKey() {
+    return fetchJSON('/api/notifications/vapid-key');
+  },
+
+  getNotificationPrefs() {
+    return fetchJSON('/api/notifications/prefs');
+  },
+
+  async saveNotificationPrefs(data) {
+    const r = await fetch('/api/notifications/prefs', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+  },
+
+  async subscribeNotifications(subscription) {
+    const r = await fetch('/api/notifications/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(subscription),
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${r.status}`);
+    }
+  },
+
+  async unsubscribeNotifications(endpoint) {
+    const r = await fetch('/api/notifications/subscribe', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint }),
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${r.status}`);
+    }
+  },
 };
 
 export default api;

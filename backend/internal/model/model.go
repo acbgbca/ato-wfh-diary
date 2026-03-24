@@ -70,6 +70,29 @@ type UserProfile struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+// NotificationPrefs stores a user's push notification schedule.
+type NotificationPrefs struct {
+	ID           int64      `json:"id"`
+	UserID       int64      `json:"user_id"`
+	Enabled      bool       `json:"enabled"`
+	NotifyDay    int        `json:"notify_day"`  // 0 = Sunday, 1 = Monday
+	NotifyTime   string     `json:"notify_time"` // HH:MM in app timezone
+	NextNotifyAt *time.Time `json:"next_notify_at,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+}
+
+// PushSubscription represents a browser Web Push API subscription for a user/device.
+type PushSubscription struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"user_id"`
+	Endpoint  string    `json:"endpoint"`
+	P256dhKey string    `json:"p256dh_key"`
+	AuthKey   string    `json:"auth_key"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // FinancialYear returns the Australian financial year that contains t.
 // e.g. 15 Aug 2024 → 2025, 3 Mar 2025 → 2025.
 func FinancialYear(t time.Time) int {
