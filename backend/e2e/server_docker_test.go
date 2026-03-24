@@ -57,6 +57,12 @@ func runDockerTests(m *testing.M) int {
 
 	log.Printf("e2e_docker: waiting for server at %s...", dockerTestURL)
 	if err := waitForServer(dockerTestURL, 60*time.Second); err != nil {
+		// Dump container logs so the failure is diagnosable without SSH access.
+		log.Println("e2e_docker: container logs:")
+		dump := exec.Command("docker", "compose", "-f", composeFile, "logs")
+		dump.Stdout = os.Stdout
+		dump.Stderr = os.Stderr
+		dump.Run()
 		log.Printf("e2e_docker: server did not become ready: %v", err)
 		return 1
 	}
