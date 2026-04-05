@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 )
 
 func TestGetWeekEntries_Empty(t *testing.T) {
@@ -236,19 +237,28 @@ func TestGetFirstIncompleteWeek_AllCompleteReturnsNull(t *testing.T) {
 	srv := newTestServer(t)
 	userID := mustCreateUser(t, srv, "alice")
 
-	// Determine the current week's Monday (today is 2026-03-23 = Monday).
-	// Use from_date set to current Monday and seed all 7 days of that week,
-	// so that the only week checked is complete.
-	weekMonday := "2026-03-23"
+	// Dynamically compute the current week's Monday so the test remains
+	// correct as time passes. Seeding only the current week means no
+	// incomplete weeks exist up to (and including) today.
+	today := time.Now().UTC()
+	daysToMonday := int(today.Weekday()+6) % 7
+	monday := today.AddDate(0, 0, -daysToMonday)
+	weekMonday := monday.Format("2006-01-02")
+
+	fy := monday.Year()
+	if monday.Month() >= time.July {
+		fy++
+	}
+
 	entries := make([]map[string]any, 7)
 	for i := 0; i < 7; i++ {
-		d := fmt.Sprintf("2026-03-%02d", 23+i)
+		d := monday.AddDate(0, 0, i).Format("2006-01-02")
 		entries[i] = map[string]any{"entry_date": d, "day_type": "office", "hours": 0}
 	}
 	do(t, srv, http.MethodPost, fmt.Sprintf("/api/users/%d/entries", userID), "alice", entries)
 
 	resp := do(t, srv, http.MethodGet,
-		fmt.Sprintf("/api/users/%d/entries/first-incomplete-week?financial_year=2026&from_date=%s", userID, weekMonday),
+		fmt.Sprintf("/api/users/%d/entries/first-incomplete-week?financial_year=%d&from_date=%s", userID, fy, weekMonday),
 		"alice", nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
