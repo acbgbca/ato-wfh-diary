@@ -179,6 +179,7 @@ function bindEvents() {
     document.getElementById('notif-schedule').hidden = !e.target.checked;
   });
   on('save-notif', 'click', saveNotificationPrefs);
+  on('test-notif', 'click', sendTestNotification);
   on('notif-install-btn', 'click', async () => {
     if (!installPrompt) return;
     installPrompt.prompt();
@@ -473,6 +474,17 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
 }
 
+async function sendTestNotification() {
+  setNotifTestStatus('Sending…', false);
+  try {
+    await api.testNotification();
+    setNotifTestStatus('Test notification sent!', false);
+    setTimeout(clearNotifTestStatus, 5000);
+  } catch (e) {
+    setNotifTestStatus(e.message, true);
+  }
+}
+
 function setNotifStatus(msg, isError) {
   const el = document.getElementById('notif-status');
   el.textContent = msg;
@@ -481,6 +493,18 @@ function setNotifStatus(msg, isError) {
 
 function clearNotifStatus() {
   const el = document.getElementById('notif-status');
+  el.textContent = '';
+  el.className = 'save-msg';
+}
+
+function setNotifTestStatus(msg, isError) {
+  const el = document.getElementById('notif-test-status');
+  el.textContent = msg;
+  el.className = 'save-msg ' + (isError ? 'error' : 'success');
+}
+
+function clearNotifTestStatus() {
+  const el = document.getElementById('notif-test-status');
   el.textContent = '';
   el.className = 'save-msg';
 }

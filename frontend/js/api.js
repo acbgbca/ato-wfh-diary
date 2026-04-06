@@ -97,6 +97,14 @@ const api = {
     }
   },
 
+  async testNotification() {
+    const r = await fetch('/api/notifications/test', { method: 'POST' });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${r.status}`);
+    }
+  },
+
   async unsubscribeNotifications(endpoint) {
     const r = await fetch('/api/notifications/subscribe', {
       method: 'DELETE',

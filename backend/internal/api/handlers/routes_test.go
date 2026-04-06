@@ -27,7 +27,7 @@ func newTestServerWithFrontend(t *testing.T, buildHash string) *httptest.Server 
 	if err != nil {
 		t.Fatalf("generate vapid keys: %v", err)
 	}
-	h := handlers.NewWithConfig(store, publicKey, "Australia/Melbourne")
+	h := handlers.NewWithConfig(store, publicKey, "", "", "Australia/Melbourne")
 
 	fakeFS := fstest.MapFS{
 		"index.html": &fstest.MapFile{

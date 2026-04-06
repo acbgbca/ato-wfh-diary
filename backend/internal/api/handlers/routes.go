@@ -34,6 +34,7 @@ func NewRouter(h *Handler, authHeader string, frontendFS fs.FS, buildHash string
 	mux.Handle("PUT /api/notifications/prefs", auth(http.HandlerFunc(h.PutNotificationPrefs)))
 	mux.Handle("POST /api/notifications/subscribe", auth(http.HandlerFunc(h.PostSubscribe)))
 	mux.Handle("DELETE /api/notifications/subscribe", auth(http.HandlerFunc(h.DeleteSubscribe)))
+	mux.Handle("POST /api/notifications/test", auth(http.HandlerFunc(h.PostTestNotification)))
 
 	if frontendFS != nil {
 		mux.Handle("/", newStaticHandler(frontendFS, buildHash))

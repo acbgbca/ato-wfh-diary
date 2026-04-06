@@ -40,6 +40,9 @@ FROM scratch
 COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group  /etc/group
 
+# CA certificates are required for outbound TLS connections (e.g. Web Push endpoints).
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
 # Application binary.
 COPY --from=builder /out/server /server
 
