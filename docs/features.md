@@ -148,6 +148,18 @@ The application is installable as a PWA on supported browsers and devices:
 - On iOS, the `apple-touch-icon` link enables "Add to Home Screen" support
 - The browser's native install prompt is relied upon (no custom install UI)
 
+#### Service Worker caching strategy
+
+`sw.js` is served as a Go template (like `index.html`) with the build hash injected into the cache name:
+
+```
+const CACHE = 'wfh-diary-{{.BuildHash}}';
+```
+
+This means every new deployment produces a different SW file (different bytes), causing the browser to detect an update, install the new SW, and delete the old versioned cache. The SW is served with `Cache-Control: no-cache` so the browser always checks for a new version.
+
+At install time the SW pre-caches bare asset URLs (`/js/app.js`, etc.). The fetch handler uses `{ ignoreSearch: true }` when looking up cache entries so that versioned URLs like `/js/app.js?v=abc123` are served from the cache without a round trip to the network.
+
 ### Views
 
 #### Diary (default view)
@@ -253,6 +265,29 @@ A background goroutine runs every `NOTIFICATION_SCHEDULER_INTERVAL` (default `10
 | `VAPID_SUBJECT` | `mailto:admin@example.com` | VAPID contact identifier (required by the Web Push spec) |
 
 VAPID keys are auto-generated on first run and stored in the `app_config` database table.
+
+## Client-Side Error Logging
+
+A global JavaScript error handler is embedded in `index.html` (before the app module loads). It captures:
+
+- Uncaught JavaScript exceptions (`window.onerror`)
+- Unhandled promise rejections (`unhandledrejection` event)
+- `<script>` tag load failures (e.g. a module fetch failing)
+
+On any error it POSTs to `POST /api/debug/client-error` using `navigator.sendBeacon` (fire-and-forget, survives page navigation). The payload includes:
+
+| Field | Description |
+|-------|-------------|
+| `message` | Error message (and source location for `onerror`) |
+| `stack` | Stack trace (if available) |
+| `url` | Current page URL |
+| `platform` | `navigator.platform` / `navigator.userAgentData.platform` |
+| `displayMode` | `standalone` (PWA) or `browser` |
+| `screenWidth` / `screenHeight` | Device screen dimensions |
+
+The server logs the username (from the forward-auth header, if present), `User-Agent`, and all payload fields. The endpoint does **not** require authentication so it can be reached even when auth is failing.
+
+> **Note:** if the reverse proxy applies authentication to all `/api/` paths, `/api/debug/client-error` may need to be whitelisted to receive unauthenticated error reports.
 
 ### API (entries)
 

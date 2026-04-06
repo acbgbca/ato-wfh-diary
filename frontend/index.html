@@ -160,6 +160,54 @@
     </section>
   </main>
 
+  <!-- Global error handler: catches JS errors and unhandled promise rejections,
+       then POSTs them to the server for diagnosis. Runs before the app module
+       so it captures module-load failures too. Uses sendBeacon for reliability. -->
+  <script>
+  (function () {
+    function sendErrorReport(data) {
+      try {
+        var blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+        navigator.sendBeacon('/api/debug/client-error', blob);
+      } catch (_) {}
+    }
+
+    function buildReport(message, stack) {
+      return {
+        message: String(message || ''),
+        stack: String(stack || ''),
+        url: window.location.href,
+        platform: (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '',
+        displayMode: window.matchMedia('(display-mode: standalone)').matches ? 'standalone' : 'browser',
+        screenWidth: (window.screen && window.screen.width) || 0,
+        screenHeight: (window.screen && window.screen.height) || 0,
+      };
+    }
+
+    window.onerror = function (message, source, lineno, colno, error) {
+      sendErrorReport(buildReport(
+        message + ' (' + source + ':' + lineno + ':' + colno + ')',
+        error && error.stack
+      ));
+    };
+
+    window.addEventListener('unhandledrejection', function (e) {
+      var reason = e.reason;
+      sendErrorReport(buildReport(
+        (reason && reason.message) || String(reason),
+        reason && reason.stack
+      ));
+    });
+
+    // Catch <script> tag load failures (e.g. module fetch errors)
+    window.addEventListener('error', function (e) {
+      if (e.target && e.target !== window && e.target.tagName === 'SCRIPT') {
+        sendErrorReport(buildReport('Script load failed: ' + (e.target.src || '(unknown)'), ''));
+      }
+    }, true);
+  })();
+  </script>
+
   <script type="module" src="/js/app.js?v={{.BuildHash}}"></script>
 </body>
 </html>
