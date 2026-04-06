@@ -130,7 +130,7 @@ func (s *NotificationService) processUser(ctx context.Context, userID int64, not
 		resp, err := webpush.SendNotification(payload, pushSub, &webpush.Options{
 			VAPIDPublicKey:  s.config.VAPIDPublicKey,
 			VAPIDPrivateKey: s.config.VAPIDPrivateKey,
-			Subscriber:      s.config.VAPIDSubject,
+			Subscriber:      normalizeVAPIDSubscriber(s.config.VAPIDSubject),
 		})
 		if err != nil {
 			log.Printf("push notification: scheduled to user %d, device %q: send error: %v", userID, device, err)
@@ -145,6 +145,15 @@ func (s *NotificationService) processUser(ctx context.Context, userID int64, not
 		log.Printf("push notification: scheduled to user %d, device %q: sent successfully (status %d)", userID, device, resp.StatusCode)
 	}
 	return nil
+}
+
+// normalizeVAPIDSubscriber strips a leading "mailto:" prefix before passing
+// the subscriber to the webpush library. The library prepends "mailto:" to any
+// value that does not start with "https:", so passing an already-prefixed value
+// (e.g. "mailto:user@example.com") would produce "mailto:mailto:user@example.com"
+// in the JWT sub claim, which Apple's push service rejects with BadJwtToken.
+func normalizeVAPIDSubscriber(s string) string {
+	return strings.TrimPrefix(s, "mailto:")
 }
 
 // endpointHost extracts the host from a push endpoint URL for logging.

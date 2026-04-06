@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
@@ -191,7 +192,7 @@ func (h *Handler) PostTestNotification(w http.ResponseWriter, r *http.Request) {
 		resp, err := webpush.SendNotification(payload, pushSub, &webpush.Options{
 			VAPIDPublicKey:  h.VAPIDPublicKey,
 			VAPIDPrivateKey: h.VAPIDPrivateKey,
-			Subscriber:      h.VAPIDSubject,
+			Subscriber:      normalizeVAPIDSubscriber(h.VAPIDSubject),
 		})
 		if err != nil {
 			log.Printf("push notification: test to user %q, device %q: send error: %v", username, device, err)
@@ -209,6 +210,14 @@ func (h *Handler) PostTestNotification(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, map[string]string{"status": "ok"})
+}
+
+// normalizeVAPIDSubscriber strips a leading "mailto:" prefix before passing
+// to the webpush library, which unconditionally prepends "mailto:" to any value
+// that does not start with "https:". Passing an already-prefixed value produces
+// "mailto:mailto:user@example.com" in the JWT sub claim, which Apple rejects.
+func normalizeVAPIDSubscriber(s string) string {
+	return strings.TrimPrefix(s, "mailto:")
 }
 
 // endpointHost extracts the host from a push endpoint URL for logging.
