@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -116,6 +118,8 @@ func (s *NotificationService) processUser(ctx context.Context, userID int64, not
 	}
 
 	for _, sub := range subs {
+		device := endpointHost(sub.Endpoint)
+		log.Printf("push notification: sending scheduled notification to user %d, device %q", userID, device)
 		pushSub := &webpush.Subscription{
 			Endpoint: sub.Endpoint,
 			Keys: webpush.Keys{
@@ -129,14 +133,27 @@ func (s *NotificationService) processUser(ctx context.Context, userID int64, not
 			Subscriber:      s.config.VAPIDSubject,
 		})
 		if err != nil {
+			log.Printf("push notification: scheduled to user %d, device %q: send error: %v", userID, device, err)
 			return fmt.Errorf("send push to endpoint: %w", err)
 		}
+		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if resp.StatusCode >= 400 {
+			log.Printf("push notification: scheduled to user %d, device %q: push service rejected (status %d): %s", userID, device, resp.StatusCode, string(body))
 			return fmt.Errorf("push rejected (status %d)", resp.StatusCode)
 		}
+		log.Printf("push notification: scheduled to user %d, device %q: sent successfully (status %d)", userID, device, resp.StatusCode)
 	}
 	return nil
+}
+
+// endpointHost extracts the host from a push endpoint URL for logging.
+// Falls back to the full endpoint string if parsing fails.
+func endpointHost(endpoint string) string {
+	if u, err := url.Parse(endpoint); err == nil && u.Host != "" {
+		return u.Host
+	}
+	return endpoint
 }
 
 // ComputeNextNotifyAt returns the next occurrence of (weekday=notifyDay,
