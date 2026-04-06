@@ -27,13 +27,14 @@ func newTestServerWithFrontend(t *testing.T, buildHash string) *httptest.Server 
 	if err != nil {
 		t.Fatalf("generate vapid keys: %v", err)
 	}
-	h := handlers.NewWithConfig(store, publicKey, "", "", "Australia/Melbourne")
+	h := handlers.NewWithConfig(store, publicKey, "", "", "Australia/Melbourne", testAuthHeader)
 
 	fakeFS := fstest.MapFS{
 		"index.html": &fstest.MapFile{
 			Data: []byte(`<html><head><link rel="stylesheet" href="/css/app.css?v={{.BuildHash}}"></head><body><script src="/js/app.js?v={{.BuildHash}}"></script></body></html>`),
 		},
-		"js/app.js":  &fstest.MapFile{Data: []byte(`console.log("app")`)},
+		"sw.js":       &fstest.MapFile{Data: []byte(`const CACHE = 'wfh-diary-{{.BuildHash}}';`)},
+		"js/app.js":   &fstest.MapFile{Data: []byte(`console.log("app")`)},
 		"css/app.css": &fstest.MapFile{Data: []byte(`body {}`)},
 	}
 
@@ -99,6 +100,49 @@ func TestJSAsset_LongCacheHeader(t *testing.T) {
 	cc := resp.Header.Get("Cache-Control")
 	if cc != "max-age=31536000, immutable" {
 		t.Errorf("expected long cache header, got %q", cc)
+	}
+}
+
+func TestSWJS_NoCacheAndBuildHashSubstituted(t *testing.T) {
+	srv := newTestServerWithFrontend(t, "abc123")
+
+	resp, err := http.Get(srv.URL + "/sw.js")
+	if err != nil {
+		t.Fatalf("GET /sw.js: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	cc := resp.Header.Get("Cache-Control")
+	if cc != "no-cache" {
+		t.Errorf("expected Cache-Control: no-cache for sw.js, got %q", cc)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	bodyStr := string(body)
+	if !strings.Contains(bodyStr, "abc123") {
+		t.Errorf("expected build hash abc123 in sw.js body, got:\n%s", bodyStr)
+	}
+	if strings.Contains(bodyStr, "{{.BuildHash}}") {
+		t.Errorf("template placeholder was not substituted in sw.js")
+	}
+}
+
+func TestClientError_NoAuth(t *testing.T) {
+	srv := newTestServerWithFrontend(t, "abc123")
+
+	payload := strings.NewReader(`{"message":"test error","stack":"Error\n  at foo","url":"https://example.com","platform":"iPhone","displayMode":"standalone","screenWidth":390,"screenHeight":844}`)
+	resp, err := http.Post(srv.URL+"/api/debug/client-error", "application/json", payload)
+	if err != nil {
+		t.Fatalf("POST /api/debug/client-error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Must succeed without any auth header
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("expected 204, got %d", resp.StatusCode)
 	}
 }
 

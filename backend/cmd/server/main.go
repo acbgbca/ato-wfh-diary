@@ -64,7 +64,7 @@ func main() {
 		log.Fatalf("load vapid public key: %v", err)
 	}
 
-	handler := handlers.NewWithConfig(store, vapidPublic, vapidPrivate, vapidSubject, notifyTimezone)
+	handler := handlers.NewWithConfig(store, vapidPublic, vapidPrivate, vapidSubject, notifyTimezone, authHeader)
 	router := handlers.NewRouter(handler, authHeader, frontend.FS, buildHash)
 
 	if devUser != "" {

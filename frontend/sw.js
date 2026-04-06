@@ -1,4 +1,6 @@
-const CACHE = 'wfh-diary-v1';
+// Cache name includes the build hash so a new deployment automatically
+// invalidates the old cache and re-fetches all assets.
+const CACHE = 'wfh-diary-{{.BuildHash}}';
 const ASSETS = ['/', '/css/app.css', '/js/app.js', '/js/api.js', '/manifest.json', '/icons/icon.svg'];
 
 self.addEventListener('install', e => {
@@ -20,7 +22,9 @@ self.addEventListener('fetch', e => {
   if (new URL(e.request.url).pathname.startsWith('/api/')) return;
 
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+    // ignoreSearch so versioned URLs like /js/app.js?v=abc123 match the
+    // bare-URL entries stored in the cache at install time.
+    caches.match(e.request, { ignoreSearch: true }).then(cached => cached || fetch(e.request))
   );
 });
 

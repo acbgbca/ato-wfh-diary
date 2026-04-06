@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"net/http"
 	"strings"
+	texttmpl "text/template"
 )
 
 // NewRouter builds the application HTTP router.
@@ -36,6 +37,9 @@ func NewRouter(h *Handler, authHeader string, frontendFS fs.FS, buildHash string
 	mux.Handle("DELETE /api/notifications/subscribe", auth(http.HandlerFunc(h.DeleteSubscribe)))
 	mux.Handle("POST /api/notifications/test", auth(http.HandlerFunc(h.PostTestNotification)))
 
+	// No auth — must be reachable even when authentication is failing.
+	mux.Handle("POST /api/debug/client-error", http.HandlerFunc(h.PostClientError))
+
 	if frontendFS != nil {
 		mux.Handle("/", newStaticHandler(frontendFS, buildHash))
 	}
@@ -45,8 +49,8 @@ func NewRouter(h *Handler, authHeader string, frontendFS fs.FS, buildHash string
 
 // newStaticHandler returns an http.Handler that serves embedded frontend assets with
 // appropriate cache headers:
-//   - index.html is rendered as a Go template with BuildHash substituted, served with Cache-Control: no-cache
-//   - JS and CSS assets are served with Cache-Control: max-age=31536000, immutable
+//   - index.html and sw.js are rendered as Go templates with BuildHash substituted, served with Cache-Control: no-cache
+//   - Other JS and CSS assets are served with Cache-Control: max-age=31536000, immutable
 func newStaticHandler(frontendFS fs.FS, buildHash string) http.Handler {
 	fileServer := http.FileServerFS(frontendFS)
 
@@ -54,7 +58,18 @@ func newStaticHandler(frontendFS fs.FS, buildHash string) http.Handler {
 	if err != nil {
 		panic("static handler: cannot read index.html: " + err.Error())
 	}
-	tmpl := template.Must(template.New("index").Parse(string(indexBytes)))
+	indexTmpl := template.Must(template.New("index").Parse(string(indexBytes)))
+
+	// sw.js is served as a text template (not HTML) so the build hash is injected
+	// into the cache name without HTML escaping. Cache-Control: no-cache ensures
+	// the browser always fetches the latest version to detect SW updates.
+	swBytes, err := fs.ReadFile(frontendFS, "sw.js")
+	if err != nil {
+		panic("static handler: cannot read sw.js: " + err.Error())
+	}
+	swTmpl := texttmpl.Must(texttmpl.New("sw").Parse(string(swBytes)))
+
+	tmplData := map[string]string{"BuildHash": buildHash}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -62,7 +77,14 @@ func newStaticHandler(frontendFS fs.FS, buildHash string) http.Handler {
 		if path == "/" || path == "/index.html" {
 			w.Header().Set("Cache-Control", "no-cache")
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			tmpl.Execute(w, map[string]string{"BuildHash": buildHash}) //nolint:errcheck
+			indexTmpl.Execute(w, tmplData) //nolint:errcheck
+			return
+		}
+
+		if path == "/sw.js" {
+			w.Header().Set("Cache-Control", "no-cache")
+			w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+			swTmpl.Execute(w, tmplData) //nolint:errcheck
 			return
 		}
 

@@ -31,7 +31,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 	if err != nil {
 		t.Fatalf("generate vapid keys: %v", err)
 	}
-	h := handlers.NewWithConfig(store, publicKey, "", "", "Australia/Melbourne")
+	h := handlers.NewWithConfig(store, publicKey, "", "", "Australia/Melbourne", testAuthHeader)
 	router := handlers.NewRouter(h, testAuthHeader, nil, "")
 
 	srv := httptest.NewServer(router)
