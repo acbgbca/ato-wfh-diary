@@ -110,6 +110,15 @@ async function init() {
 
     showView('diary');
   } catch (e) {
+    api.logClientError({
+      message: e.message,
+      stack: e.stack || '',
+      url: window.location.href,
+      platform: (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '',
+      displayMode: window.matchMedia('(display-mode: standalone)').matches ? 'standalone' : 'browser',
+      screenWidth: (window.screen && window.screen.width) || 0,
+      screenHeight: (window.screen && window.screen.height) || 0,
+    });
     document.querySelector('main').innerHTML =
       `<p><strong>Error loading application:</strong> ${escapeHTML(e.message)}</p>`;
   }

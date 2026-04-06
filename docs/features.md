@@ -2,10 +2,14 @@
 
 ## Authentication
 
-- Authentication is handled by an external **Forward Auth** proxy sitting in front of the application
+- Authentication is handled by an external **Forward Auth** proxy sitting in front of the application (e.g. Traefik + Authelia)
 - The Go backend reads the authenticated username from the forwarded request header (e.g. `X-Forwarded-User` or `X-Remote-User`)
 - On first login, a user record is automatically created from the forwarded username
 - No passwords or credentials are stored in the application
+
+### Expired session handling
+
+When the auth session expires the reverse proxy redirects API requests to an external login page (a different origin). All `fetch()` calls use `redirect: 'manual'` so the browser stops at the redirect and returns an `opaqueredirect` response rather than throwing a CORS error on iOS Safari. The app detects this condition (`response.type === 'opaqueredirect'`, or HTTP 401/403) and triggers a full-page navigation to the current URL — Traefik/Authelia intercepts the page request, redirects the user to the login screen, and returns them to the app after successful authentication.
 
 ## User Access
 

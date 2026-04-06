@@ -1,5 +1,28 @@
+// Triggered when the reverse-proxy auth session has expired. The browser is
+// sent to the current URL as a full page navigation so Traefik / Authelia can
+// intercept it, redirect to the login page, and return the user here after
+// successful authentication.
+function handleAuthExpiry() {
+  window.location.replace(window.location.href);
+}
+
+// Returns true when r indicates that the reverse proxy redirected the request
+// to an external auth page (opaqueredirect) or explicitly denied access
+// (401 / 403). Triggers a full-page reload to kick off the auth flow.
+function isAuthFailure(r) {
+  if (r.type === 'opaqueredirect' || r.status === 401 || r.status === 403) {
+    handleAuthExpiry();
+    return true;
+  }
+  return false;
+}
+
+// Fetches url with redirect:manual so that a reverse-proxy redirect to an
+// external auth page is detected as an opaqueredirect rather than throwing a
+// CORS error on iOS Safari.
 async function fetchJSON(url) {
-  const r = await fetch(url);
+  const r = await fetch(url, { redirect: 'manual' });
+  if (isAuthFailure(r)) return new Promise(() => {}); // never resolves — page is navigating away
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
@@ -32,7 +55,9 @@ const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(entries),
+      redirect: 'manual',
     });
+    if (isAuthFailure(r)) return;
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
       throw new Error(body.error || `HTTP ${r.status}`);
@@ -48,7 +73,9 @@ const api = {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
+      redirect: 'manual',
     });
+    if (isAuthFailure(r)) return new Promise(() => {});
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
       throw new Error(body.error || `HTTP ${r.status}`);
@@ -77,7 +104,9 @@ const api = {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
+      redirect: 'manual',
     });
+    if (isAuthFailure(r)) return new Promise(() => {});
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
       throw new Error(body.error || `HTTP ${r.status}`);
@@ -90,7 +119,9 @@ const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(subscription),
+      redirect: 'manual',
     });
+    if (isAuthFailure(r)) return;
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
       throw new Error(body.error || `HTTP ${r.status}`);
@@ -98,7 +129,8 @@ const api = {
   },
 
   async testNotification() {
-    const r = await fetch('/api/notifications/test', { method: 'POST' });
+    const r = await fetch('/api/notifications/test', { method: 'POST', redirect: 'manual' });
+    if (isAuthFailure(r)) return;
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
       throw new Error(body.error || `HTTP ${r.status}`);
@@ -110,11 +142,21 @@ const api = {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ endpoint }),
+      redirect: 'manual',
     });
+    if (isAuthFailure(r)) return;
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
       throw new Error(body.error || `HTTP ${r.status}`);
     }
+  },
+
+  async logClientError(report) {
+    try {
+      // Use sendBeacon for fire-and-forget reliability; this endpoint has no auth.
+      const blob = new Blob([JSON.stringify(report)], { type: 'application/json' });
+      navigator.sendBeacon('/api/debug/client-error', blob);
+    } catch (_) {}
   },
 };
 
