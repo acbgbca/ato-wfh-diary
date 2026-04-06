@@ -5,7 +5,10 @@ import (
 	"ato-wfh-diary/internal/model"
 	"ato-wfh-diary/internal/service"
 	"encoding/json"
+	"io"
+	"log"
 	"net/http"
+	"net/url"
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
@@ -176,6 +179,8 @@ func (h *Handler) PostTestNotification(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, sub := range subs {
+		device := endpointHost(sub.Endpoint)
+		log.Printf("push notification: sending test notification to user %q, device %q", username, device)
 		pushSub := &webpush.Subscription{
 			Endpoint: sub.Endpoint,
 			Keys: webpush.Keys{
@@ -189,17 +194,30 @@ func (h *Handler) PostTestNotification(w http.ResponseWriter, r *http.Request) {
 			Subscriber:      h.VAPIDSubject,
 		})
 		if err != nil {
+			log.Printf("push notification: test to user %q, device %q: send error: %v", username, device, err)
 			respondError(w, http.StatusBadGateway, "failed to send notification: "+err.Error())
 			return
 		}
+		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if resp.StatusCode >= 400 {
+			log.Printf("push notification: test to user %q, device %q: push service rejected (status %d): %s", username, device, resp.StatusCode, string(body))
 			respondError(w, http.StatusBadGateway, "push service rejected notification")
 			return
 		}
+		log.Printf("push notification: test to user %q, device %q: sent successfully (status %d)", username, device, resp.StatusCode)
 	}
 
 	respondJSON(w, map[string]string{"status": "ok"})
+}
+
+// endpointHost extracts the host from a push endpoint URL for logging.
+// Falls back to the full endpoint string if parsing fails.
+func endpointHost(endpoint string) string {
+	if u, err := url.Parse(endpoint); err == nil && u.Host != "" {
+		return u.Host
+	}
+	return endpoint
 }
 
 // DeleteSubscribe removes a push subscription by endpoint.
