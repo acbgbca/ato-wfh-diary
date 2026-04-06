@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+
+	webpush "github.com/SherClockHolmes/webpush-go"
 )
 
 // GetVapidKey returns the application's VAPID public key so the browser can
@@ -142,6 +144,62 @@ func (h *Handler) PostSubscribe(w http.ResponseWriter, r *http.Request) {
 // deleteSubscribeRequest is the JSON body for DELETE /api/notifications/subscribe.
 type deleteSubscribeRequest struct {
 	Endpoint string `json:"endpoint"`
+}
+
+// PostTestNotification sends a test push notification to all of the current
+// user's registered push subscriptions.
+func (h *Handler) PostTestNotification(w http.ResponseWriter, r *http.Request) {
+	username := middleware.UsernameFromContext(r.Context())
+	user, err := h.Store.GetUserByUsername(r.Context(), username)
+	if err != nil || user == nil {
+		respondError(w, http.StatusInternalServerError, "could not retrieve user")
+		return
+	}
+
+	subs, err := h.Store.GetPushSubscriptionsByUserID(r.Context(), user.ID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "could not retrieve subscriptions")
+		return
+	}
+	if len(subs) == 0 {
+		respondError(w, http.StatusBadRequest, "no push subscriptions registered for this user")
+		return
+	}
+
+	payload, err := json.Marshal(map[string]string{
+		"title": "WFH Diary",
+		"body":  "Test notification — push notifications are working!",
+	})
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "could not build notification payload")
+		return
+	}
+
+	for _, sub := range subs {
+		pushSub := &webpush.Subscription{
+			Endpoint: sub.Endpoint,
+			Keys: webpush.Keys{
+				P256dh: sub.P256dhKey,
+				Auth:   sub.AuthKey,
+			},
+		}
+		resp, err := webpush.SendNotification(payload, pushSub, &webpush.Options{
+			VAPIDPublicKey:  h.VAPIDPublicKey,
+			VAPIDPrivateKey: h.VAPIDPrivateKey,
+			Subscriber:      h.VAPIDSubject,
+		})
+		if err != nil {
+			respondError(w, http.StatusBadGateway, "failed to send notification: "+err.Error())
+			return
+		}
+		resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			respondError(w, http.StatusBadGateway, "push service rejected notification")
+			return
+		}
+	}
+
+	respondJSON(w, map[string]string{"status": "ok"})
 }
 
 // DeleteSubscribe removes a push subscription by endpoint.
