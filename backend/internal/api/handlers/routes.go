@@ -19,6 +19,7 @@ func NewRouter(h *Handler, authHeader string, frontendFS fs.FS, buildHash string
 	auth := middleware.ForwardAuth(authHeader)
 
 	mux.Handle("GET /api/users", auth(http.HandlerFunc(h.GetUsers)))
+	mux.Handle("POST /api/users", auth(http.HandlerFunc(h.CreateUser)))
 	mux.Handle("GET /api/me", auth(http.HandlerFunc(h.GetMe)))
 	mux.Handle("GET /api/me/profile", auth(http.HandlerFunc(h.GetProfile)))
 	mux.Handle("PUT /api/me/profile", auth(http.HandlerFunc(h.UpsertProfile)))

@@ -29,7 +29,28 @@
     <div class="user-bar">
       <label for="user-select">Viewing:</label>
       <select id="user-select"></select>
+      <button id="add-user-btn" class="outline secondary" aria-label="Add user" title="Add user">+</button>
     </div>
+
+    <dialog id="add-user-dialog">
+      <article>
+        <header>
+          <strong>Add User</strong>
+          <button id="add-user-close" class="close-btn" aria-label="Close">&times;</button>
+        </header>
+        <form id="add-user-form">
+          <label for="new-username">Username</label>
+          <input type="text" id="new-username" required>
+          <label for="new-display-name">Display Name</label>
+          <input type="text" id="new-display-name" required>
+          <span id="add-user-error" class="save-msg error"></span>
+          <footer>
+            <button type="submit">Create</button>
+            <button type="button" id="add-user-cancel" class="secondary">Cancel</button>
+          </footer>
+        </form>
+      </article>
+    </dialog>
 
     <!-- Diary view -->
     <section id="view-diary">

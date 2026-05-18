@@ -18,6 +18,15 @@ When the auth session expires the reverse proxy redirects API requests to an ext
 - Either user can **view and edit the other's entries**, as either may be responsible for completing the family's tax return
 - There is no concept of private entries — all entries are visible to both users
 
+### Manual User Creation
+
+Users can be manually created from the UI via the **+** button next to the user selector dropdown. This allows tracking WFH hours for a family member who hasn't logged in yet.
+
+- Clicking the **+** button opens a dialog with username and display name fields
+- On submission, `POST /api/users` creates the user and they appear in the dropdown, automatically selected
+- If the username already exists, a **409 Conflict** error is shown in the dialog
+- When a manually-created user eventually logs in via Forward Auth, `GetOrCreateUser` finds their existing record — no conflict
+
 ## Weekly Time Entry
 
 - Time is entered **one week at a time**
@@ -334,6 +343,14 @@ On any error it POSTs to `POST /api/debug/client-error` using `navigator.sendBea
 The server logs the username (from the forward-auth header, if present), `User-Agent`, and all payload fields. The endpoint does **not** require authentication so it can be reached even when auth is failing.
 
 > **Note:** if the reverse proxy applies authentication to all `/api/` paths, `/api/debug/client-error` may need to be whitelisted to receive unauthenticated error reports.
+
+### API (users)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/users` | Returns all users ordered by display name |
+| `POST` | `/api/users` | Creates a new user; returns 201 on success, 409 if username exists, 400 if fields are empty |
+| `GET` | `/api/me` | Returns the authenticated user, creating on first login |
 
 ### API (entries)
 

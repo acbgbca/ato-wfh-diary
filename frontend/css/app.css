@@ -13,6 +13,38 @@
   margin: 0;
 }
 
+/* ── Add user button ──────────────────────────────────────────────────────── */
+#add-user-btn {
+  width: auto;
+  margin: 0;
+  padding: 0.25rem 0.65rem;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+/* ── Add user dialog ─────────────────────────────────────────────────────── */
+#add-user-dialog article {
+  margin: 0;
+}
+
+#add-user-dialog article header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#add-user-dialog article header .close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  margin: 0;
+  line-height: 1;
+  width: auto;
+  color: var(--pico-muted-color);
+}
+
 /* ── Week navigation ───────────────────────────────────────────────────────── */
 .week-nav {
   display: flex;
