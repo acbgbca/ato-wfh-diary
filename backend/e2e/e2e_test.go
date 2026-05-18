@@ -871,12 +871,16 @@ func TestE2E_AddUser_CreatesAndSelectsUser(t *testing.T) {
 	page.MustNavigate(serverURL)
 	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
 
+	// Remember how many options exist before adding
+	initialCount := page.MustEval(`() => document.getElementById('user-select').options.length`).Int()
+
 	// Click the add user button
 	page.MustElement("#add-user-btn").MustClick()
 	waitFor(t, page, `() => document.getElementById('add-user-dialog').open === true`)
 
-	// Fill in the form
-	page.MustElement("#add-user-username").MustInput("bob")
+	// Fill in the form — use test-unique username to avoid conflicts in shared DB
+	uniqueUser := testUsername(t, "bob") + "_new"
+	page.MustElement("#add-user-username").MustInput(uniqueUser)
 	page.MustElement("#add-user-display-name").MustInput("Bob Smith")
 
 	// Submit
@@ -884,10 +888,10 @@ func TestE2E_AddUser_CreatesAndSelectsUser(t *testing.T) {
 	waitFor(t, page, `() => document.getElementById('add-user-dialog').open === false`)
 
 	// Verify the new user appears in the dropdown and is selected
-	waitFor(t, page, `() => {
+	waitFor(t, page, fmt.Sprintf(`() => {
 		const sel = document.getElementById('user-select');
-		return sel.options.length === 2 && sel.options[sel.selectedIndex].text === 'Bob Smith';
-	}`)
+		return sel.options.length === %d && sel.options[sel.selectedIndex].text === 'Bob Smith';
+	}`, initialCount+1))
 }
 
 // TestE2E_AddUser_DuplicateShowsError verifies that trying to create a user
@@ -898,11 +902,13 @@ func TestE2E_AddUser_DuplicateShowsError(t *testing.T) {
 	page.MustNavigate(serverURL)
 	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
 
-	// "alice" already exists (auto-created by /api/me)
+	// The auto-created user's username (varies by test environment)
+	existingUser := testUsername(t, "alice")
+
 	page.MustElement("#add-user-btn").MustClick()
 	waitFor(t, page, `() => document.getElementById('add-user-dialog').open === true`)
 
-	page.MustElement("#add-user-username").MustInput("alice")
+	page.MustElement("#add-user-username").MustInput(existingUser)
 	page.MustElement("#add-user-display-name").MustInput("Alice Again")
 	page.MustElement("#add-user-submit").MustClick()
 
@@ -924,16 +930,19 @@ func TestE2E_AddUser_CancelClosesDialog(t *testing.T) {
 	page.MustNavigate(serverURL)
 	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
 
+	// Remember option count before opening dialog
+	initialCount := page.MustEval(`() => document.getElementById('user-select').options.length`).Int()
+
 	page.MustElement("#add-user-btn").MustClick()
 	waitFor(t, page, `() => document.getElementById('add-user-dialog').open === true`)
 
 	page.MustElement("#add-user-cancel").MustClick()
 	waitFor(t, page, `() => document.getElementById('add-user-dialog').open === false`)
 
-	// Only the initial user should be in the dropdown
+	// Dropdown should be unchanged after cancel
 	optionCount := page.MustEval(`() => document.getElementById('user-select').options.length`).Int()
-	if optionCount != 1 {
-		t.Errorf("expected 1 user in dropdown, got %d", optionCount)
+	if optionCount != initialCount {
+		t.Errorf("expected %d users in dropdown after cancel, got %d", initialCount, optionCount)
 	}
 }
 
