@@ -35,12 +35,12 @@
     <section id="view-diary">
       <div class="week-nav">
         <button id="prev-week" class="secondary outline">&#8592; Prev</button>
-        <strong id="week-label"></strong>
+        <strong id="week-label" role="button" tabindex="0" aria-haspopup="dialog"></strong>
         <button id="next-week" class="secondary outline">Next &#8594;</button>
       </div>
-      <dialog id="week-picker" class="bottom-sheet">
+      <dialog id="week-picker" class="bottom-sheet" aria-labelledby="week-picker-heading">
         <div class="bottom-sheet-header">
-          <span>Jump to week</span>
+          <span id="week-picker-heading">Jump to week</span>
           <button id="week-picker-close" class="close-btn" aria-label="Close">&times;</button>
         </div>
         <div class="bottom-sheet-actions">

@@ -184,6 +184,14 @@ function bindEvents() {
   on('jump-last-week',    'click', jumpLastWeek);
   on('jump-first-incomplete', 'click', jumpFirstIncomplete);
 
+  // Open week picker on Enter/Space when week label is focused
+  document.getElementById('week-label').addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openWeekPicker();
+    }
+  });
+
   // Close on backdrop click
   document.getElementById('week-picker').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeWeekPicker();
@@ -406,6 +414,15 @@ async function openWeekPicker() {
   const dialog = document.getElementById('week-picker');
   const listEl = document.getElementById('week-list');
 
+  // Show loading state immediately
+  listEl.innerHTML = '<div class="week-list-loading">Loading…</div>';
+
+  dialog.showModal();
+
+  // Focus the first interactive element inside the dialog
+  const firstBtn = dialog.querySelector('#jump-last-week');
+  if (firstBtn) firstBtn.focus();
+
   // Determine weeks in current FY up to the most recent fully-passed week
   const fy = currentFY();
   const fyStart = new Date(fy - 1, 6, 1); // July 1
@@ -429,45 +446,56 @@ async function openWeekPicker() {
 
   // Fetch completion data
   let statusMap = {};
+  let fetchFailed = false;
   try {
     const statuses = await api.getWeekStatus(selectedUserId, fy);
     statuses.forEach(s => { statusMap[s.week_start] = s.count; });
-  } catch (_) {}
+  } catch (_) {
+    fetchFailed = true;
+  }
 
-  const currentWeekStr = formatDate(weekStart);
+  // If the dialog was closed while we were fetching, bail out
+  if (!dialog.open) return;
 
-  listEl.innerHTML = weeks.map(w => {
-    const ws = formatDate(w);
-    const sun = formatDate(addDays(w, 6));
-    const count = statusMap[ws] || 0;
-    const isComplete = count >= 7;
-    const isCurrent = ws === currentWeekStr;
-    return `<div class="week-list-item${isCurrent ? ' current-week' : ''}" data-week-start="${ws}">
-      <span class="completion-dot${isComplete ? ' complete' : ''}">${isComplete ? '●' : '○'}</span>
-      <span>${fmtLabel(ws)} — ${fmtLabel(sun)}</span>
-    </div>`;
-  }).join('');
+  if (fetchFailed) {
+    listEl.innerHTML = '<div class="week-list-error">Could not load weeks</div>';
+  } else {
+    const currentWeekStr = formatDate(weekStart);
 
-  // Add click handlers to week items
-  listEl.querySelectorAll('.week-list-item').forEach(item => {
-    item.addEventListener('click', () => {
-      weekStart = getMonday(new Date(item.dataset.weekStart + 'T00:00:00'));
-      closeWeekPicker();
-      loadWeek();
+    listEl.innerHTML = weeks.map(w => {
+      const ws = formatDate(w);
+      const sun = formatDate(addDays(w, 6));
+      const count = statusMap[ws] || 0;
+      const isComplete = count >= 7;
+      const isCurrent = ws === currentWeekStr;
+      return `<button type="button" class="week-list-item${isCurrent ? ' current-week' : ''}" data-week-start="${ws}">
+        <span class="completion-dot${isComplete ? ' complete' : ''}">${isComplete ? '●' : '○'}</span>
+        <span>${fmtLabel(ws)} — ${fmtLabel(sun)}</span>
+      </button>`;
+    }).join('');
+
+    // Add click handlers to week items
+    listEl.querySelectorAll('.week-list-item').forEach(item => {
+      item.addEventListener('click', () => {
+        weekStart = getMonday(new Date(item.dataset.weekStart + 'T00:00:00'));
+        closeWeekPicker();
+        loadWeek();
+      });
     });
-  });
 
-  dialog.showModal();
-
-  // Scroll to the current week
-  const currentItem = listEl.querySelector('.current-week');
-  if (currentItem) {
-    currentItem.scrollIntoView({ block: 'center', behavior: 'instant' });
+    // Scroll to the current week
+    const currentItem = listEl.querySelector('.current-week');
+    if (currentItem) {
+      currentItem.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
   }
 }
 
 function closeWeekPicker() {
-  document.getElementById('week-picker').close();
+  const dialog = document.getElementById('week-picker');
+  dialog.close();
+  // Return focus to the week label trigger
+  document.getElementById('week-label').focus();
 }
 
 function jumpLastWeek() {
