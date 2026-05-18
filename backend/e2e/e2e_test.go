@@ -224,12 +224,16 @@ func TestE2E_WeekDefaults_FromProfile(t *testing.T) {
 
 	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
 
-	// Set up profile: Wednesday = office, default hours = 6.
+	// Set up profile: Mon–Fri = WFH, Wednesday = office, default hours = 6.
 	page.MustElement("#nav-settings").MustClick()
 	waitFor(t, page, `() => !document.getElementById('view-settings').hidden`)
 
 	page.MustElement("#profile-default-hours").MustInput("6")
+	page.MustElement("#profile-mon-type").MustSelect("Work From Home")
+	page.MustElement("#profile-tue-type").MustSelect("Work From Home")
 	page.MustElement("#profile-wed-type").MustSelect("Office")
+	page.MustElement("#profile-thu-type").MustSelect("Work From Home")
+	page.MustElement("#profile-fri-type").MustSelect("Work From Home")
 	page.MustElement("#save-profile").MustClick()
 	waitFor(t, page, `() => document.getElementById('profile-status').textContent === 'Saved'`)
 
@@ -982,5 +986,248 @@ func TestE2E_WeekPicker_ErrorState(t *testing.T) {
 	}
 
 	// Restore original fetch
-	page.MustEval(`() => { if (window._testOrigFetch) { window.fetch = window._testOrigFetch; delete window._testOrigFetch; } }`)
+	page.MustEval(`() => {
+		if (window._testOrigFetch) { window.fetch = window._testOrigFetch; delete window._testOrigFetch; }
+	}`)
+}
+
+// setUserProfile saves a profile for the given user via direct API call.
+func setUserProfile(t *testing.T, serverURL, username string, userID int64, profile map[string]any) {
+	t.Helper()
+	body, _ := json.Marshal(profile)
+	req, _ := http.NewRequest(http.MethodPut,
+		fmt.Sprintf("%s/api/users/%d/profile", serverURL, userID),
+		bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(testAuthHeader, username)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("setUserProfile: status %v err %v", resp.StatusCode, err)
+	}
+	resp.Body.Close()
+}
+
+// TestE2E_UserSwitch_ReloadsProfile verifies that changing the user dropdown
+// reloads the profile for the selected user, affecting diary defaults.
+func TestE2E_UserSwitch_ReloadsProfile(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+
+	// Create alice and set her profile: default_hours=7.5, all weekdays=wfh
+	aliceUser := testUsername(t, "alice")
+	aliceID := getUserID(t, serverURL, aliceUser)
+	setUserProfile(t, serverURL, aliceUser, aliceID, map[string]any{
+		"default_hours": 7.5,
+		"mon_type":      "wfh", "tue_type": "wfh", "wed_type": "wfh",
+		"thu_type": "wfh", "fri_type": "wfh",
+		"sat_type": "weekend", "sun_type": "weekend",
+	})
+
+	// Create bob with a different profile: default_hours=6, all weekdays=office
+	bobUser := testUsername(t, "bob") + "_switch"
+	bobReq, _ := http.NewRequest(http.MethodPost, serverURL+"/api/users",
+		bytes.NewReader([]byte(fmt.Sprintf(`{"username":"%s","display_name":"Bob Switch"}`, bobUser))))
+	bobReq.Header.Set("Content-Type", "application/json")
+	bobReq.Header.Set(testAuthHeader, aliceUser)
+	bobResp, err := http.DefaultClient.Do(bobReq)
+	if err != nil || bobResp.StatusCode != http.StatusCreated {
+		t.Fatalf("create bob: status %v err %v", bobResp.StatusCode, err)
+	}
+	var bobData struct {
+		ID int64 `json:"id"`
+	}
+	json.NewDecoder(bobResp.Body).Decode(&bobData)
+	bobResp.Body.Close()
+
+	setUserProfile(t, serverURL, aliceUser, bobData.ID, map[string]any{
+		"default_hours": 6,
+		"mon_type":      "office", "tue_type": "office", "wed_type": "office",
+		"thu_type": "office", "fri_type": "office",
+		"sat_type": "weekend", "sun_type": "weekend",
+	})
+
+	// Navigate to a specific past week with no entries
+	page.MustNavigate(serverURL + "?week=2025-09-01")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+	time.Sleep(500 * time.Millisecond)
+
+	// Alice's profile: Monday should be wfh with 7.5 hours
+	monType := page.MustElement("#entry-tbody tr:first-child .day-type-select").MustProperty("value").Str()
+	if monType != "wfh" {
+		t.Errorf("alice monday type: got %q, want wfh", monType)
+	}
+	monHours := page.MustElement("#entry-tbody tr:first-child .hours-input").MustProperty("value").Str()
+	if monHours != "7.5" {
+		t.Errorf("alice monday hours: got %q, want 7.5", monHours)
+	}
+
+	// Switch to Bob
+	page.MustEval(fmt.Sprintf(`() => {
+		const sel = document.getElementById('user-select');
+		sel.value = '%d';
+		sel.dispatchEvent(new Event('change'));
+	}`, bobData.ID))
+	time.Sleep(1000 * time.Millisecond)
+
+	// Bob's profile: Monday should be office (no hours)
+	monType2 := page.MustElement("#entry-tbody tr:first-child .day-type-select").MustProperty("value").Str()
+	if monType2 != "office" {
+		t.Errorf("bob monday type: got %q, want office", monType2)
+	}
+}
+
+// TestE2E_UserSwitch_SettingsShowSelectedUser verifies that the settings page
+// loads the selected user's profile and shows whose settings are being edited.
+func TestE2E_UserSwitch_SettingsShowSelectedUser(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+
+	// Create alice with profile
+	aliceUser := testUsername(t, "alice")
+	aliceID := getUserID(t, serverURL, aliceUser)
+	setUserProfile(t, serverURL, aliceUser, aliceID, map[string]any{
+		"default_hours": 7.5,
+		"mon_type":      "wfh", "tue_type": "wfh", "wed_type": "wfh",
+		"thu_type": "wfh", "fri_type": "wfh",
+		"sat_type": "weekend", "sun_type": "weekend",
+	})
+
+	// Create bob with different profile
+	bobUser := testUsername(t, "bob") + "_settings"
+	bobReq, _ := http.NewRequest(http.MethodPost, serverURL+"/api/users",
+		bytes.NewReader([]byte(fmt.Sprintf(`{"username":"%s","display_name":"Bob Settings"}`, bobUser))))
+	bobReq.Header.Set("Content-Type", "application/json")
+	bobReq.Header.Set(testAuthHeader, aliceUser)
+	bobResp, _ := http.DefaultClient.Do(bobReq)
+	var bobData struct {
+		ID int64 `json:"id"`
+	}
+	json.NewDecoder(bobResp.Body).Decode(&bobData)
+	bobResp.Body.Close()
+
+	setUserProfile(t, serverURL, aliceUser, bobData.ID, map[string]any{
+		"default_hours": 6,
+		"mon_type":      "office", "tue_type": "office", "wed_type": "office",
+		"thu_type": "office", "fri_type": "office",
+		"sat_type": "weekend", "sun_type": "weekend",
+	})
+
+	page.MustNavigate(serverURL)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Go to settings — should show alice's profile
+	page.MustElement("#nav-settings").MustClick()
+	waitFor(t, page, `() => !document.getElementById('view-settings').hidden`)
+	time.Sleep(500 * time.Millisecond)
+
+	aliceHours := page.MustElement("#profile-default-hours").MustProperty("value").Str()
+	if aliceHours != "7.5" {
+		t.Errorf("alice default_hours: got %q, want 7.5", aliceHours)
+	}
+
+	// Switch to Bob
+	page.MustEval(fmt.Sprintf(`() => {
+		const sel = document.getElementById('user-select');
+		sel.value = '%d';
+		sel.dispatchEvent(new Event('change'));
+	}`, bobData.ID))
+	time.Sleep(1000 * time.Millisecond)
+
+	// Settings should now show Bob's profile
+	bobHours := page.MustElement("#profile-default-hours").MustProperty("value").Str()
+	if bobHours != "6" {
+		t.Errorf("bob default_hours: got %q, want 6", bobHours)
+	}
+
+	// Settings heading should indicate whose settings are shown
+	settingsLabel := page.MustEval(`() => document.getElementById('settings-user-label')?.textContent || ''`).Str()
+	if !strings.Contains(settingsLabel, "Bob Settings") {
+		t.Errorf("settings label should contain Bob's name, got %q", settingsLabel)
+	}
+}
+
+// TestE2E_UserSwitch_SaveSettingsForSelectedUser verifies that saving settings
+// updates the selected user's profile, not the logged-in user's.
+func TestE2E_UserSwitch_SaveSettingsForSelectedUser(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+
+	// Create alice
+	aliceUser := testUsername(t, "alice")
+	aliceID := getUserID(t, serverURL, aliceUser)
+	setUserProfile(t, serverURL, aliceUser, aliceID, map[string]any{
+		"default_hours": 7.5,
+		"mon_type":      "wfh", "tue_type": "wfh", "wed_type": "wfh",
+		"thu_type": "wfh", "fri_type": "wfh",
+		"sat_type": "weekend", "sun_type": "weekend",
+	})
+
+	// Create bob
+	bobUser := testUsername(t, "bob") + "_save"
+	bobReq, _ := http.NewRequest(http.MethodPost, serverURL+"/api/users",
+		bytes.NewReader([]byte(fmt.Sprintf(`{"username":"%s","display_name":"Bob Save"}`, bobUser))))
+	bobReq.Header.Set("Content-Type", "application/json")
+	bobReq.Header.Set(testAuthHeader, aliceUser)
+	bobResp, _ := http.DefaultClient.Do(bobReq)
+	var bobData struct {
+		ID int64 `json:"id"`
+	}
+	json.NewDecoder(bobResp.Body).Decode(&bobData)
+	bobResp.Body.Close()
+
+	setUserProfile(t, serverURL, aliceUser, bobData.ID, map[string]any{
+		"default_hours": 6,
+		"mon_type":      "office", "tue_type": "office", "wed_type": "office",
+		"thu_type": "office", "fri_type": "office",
+		"sat_type": "weekend", "sun_type": "weekend",
+	})
+
+	page.MustNavigate(serverURL)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Switch to Bob and go to settings
+	page.MustEval(fmt.Sprintf(`() => {
+		const sel = document.getElementById('user-select');
+		sel.value = '%d';
+		sel.dispatchEvent(new Event('change'));
+	}`, bobData.ID))
+	time.Sleep(500 * time.Millisecond)
+
+	page.MustElement("#nav-settings").MustClick()
+	waitFor(t, page, `() => !document.getElementById('view-settings').hidden`)
+	time.Sleep(500 * time.Millisecond)
+
+	// Change Bob's default hours to 8
+	page.MustEval(`() => document.getElementById('profile-default-hours').value = ''`)
+	page.MustElement("#profile-default-hours").MustInput("8")
+	page.MustElement("#save-profile").MustClick()
+	waitFor(t, page, `() => document.getElementById('profile-status').textContent === 'Saved'`)
+
+	// Verify by fetching Bob's profile directly from API
+	req, _ := http.NewRequest(http.MethodGet,
+		fmt.Sprintf("%s/api/users/%d/profile", serverURL, bobData.ID), nil)
+	req.Header.Set(testAuthHeader, aliceUser)
+	resp, _ := http.DefaultClient.Do(req)
+	var profile struct {
+		DefaultHours float64 `json:"default_hours"`
+	}
+	json.NewDecoder(resp.Body).Decode(&profile)
+	resp.Body.Close()
+
+	if profile.DefaultHours != 8 {
+		t.Errorf("bob's saved default_hours: got %v, want 8", profile.DefaultHours)
+	}
+
+	// Switch back to alice — verify alice's profile is unchanged
+	page.MustEval(fmt.Sprintf(`() => {
+		const sel = document.getElementById('user-select');
+		sel.value = '%d';
+		sel.dispatchEvent(new Event('change'));
+	}`, aliceID))
+	time.Sleep(1000 * time.Millisecond)
+
+	aliceHours := page.MustElement("#profile-default-hours").MustProperty("value").Str()
+	if aliceHours != "7.5" {
+		t.Errorf("alice default_hours after bob save: got %q, want 7.5", aliceHours)
+	}
 }

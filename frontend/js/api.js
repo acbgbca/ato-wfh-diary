@@ -100,8 +100,27 @@ const api = {
     return fetchJSON('/api/me/profile');
   },
 
+  getUserProfile(userId) {
+    return fetchJSON(`/api/users/${userId}/profile`);
+  },
+
   async saveProfile(data) {
     const r = await fetch('/api/me/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+      redirect: 'manual',
+    });
+    if (isAuthFailure(r)) return new Promise(() => {});
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+  },
+
+  async saveUserProfile(userId, data) {
+    const r = await fetch(`/api/users/${userId}/profile`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
