@@ -1,0 +1,64 @@
+{
+  "env": {
+    "MAX_THINKING_TOKENS": "10000",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "50",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "haiku"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(go get:*)",
+      "Bash(go test:*)",
+      "Bash(make help:*)",
+      "Bash(make test:*)",
+      "Bash(make build:*)",
+      "Bash(go build:*)",
+      "Bash(go vet:*)",
+      "Bash(docker build:*)",
+      "Bash(docker image:*)",
+      "Bash(docker run:*)",
+      "Bash(docker images:*)",
+      "Bash(docker rmi:*)",
+      "Bash(make check:*)",
+      "Bash(sudo apt-get:*)",
+      "Bash(make test-e2e:*)",
+      "Bash(gh issue:*)",
+      "Bash(gh auth:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh run:*)",
+      "Bash(wc -l /workspaces/ato-wfh-diary/backend/internal/api/handlers/*.go)",
+      "Bash(make copy-frontend:*)",
+      "Bash(go fmt:*)",
+      "Bash(git -C /workspaces/ato-wfh-diary status)",
+      "Bash(git -C /workspaces/ato-wfh-diary diff --stat HEAD)",
+      "Bash(git -C /workspaces/ato-wfh-diary add backend/cmd/server/main.go backend/go.mod backend/go.sum backend/internal/api/handlers/handlers.go backend/internal/api/handlers/handlers_test.go backend/internal/api/handlers/notifications.go backend/internal/api/handlers/notifications_test.go backend/internal/api/handlers/routes.go backend/internal/db/notifications.go backend/internal/db/notifications_test.go backend/internal/model/model.go backend/internal/service/notifications.go backend/migrations/003_notifications.sql docs/data_model.md docs/features.md frontend/index.html frontend/js/api.js frontend/js/app.js frontend/sw.js)",
+      "Bash(git -C:*)",
+      "Bash(find /workspaces/ato-wfh-diary -type d -not -path */.*)",
+      "Bash(ls -la /workspaces/ato-wfh-diary/backend/internal/db/*.go)",
+      "Bash(git pull:*)",
+      "Bash(submitted\" based on the entry count for the displayed week:*)"
+    ]
+  },
+  "model": "opus",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // .tool_input.path // empty' | { read -r f; echo \"$f\" | grep -q '\\.go$' && { gofmt -w \"$f\"; golangci-lint run --fix \"$(dirname \"$f\")\" 2>/dev/null; } || true; }",
+            "statusMessage": "Running golangci-lint --fix..."
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash .claude/statusline.sh"
+  }
+}
