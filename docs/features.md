@@ -248,10 +248,12 @@ After successfully saving a week that is before the current week, the app automa
 #### Settings
 
 - Accessible via the **Settings** nav link
+- A heading displays **"Settings for [display name]"** so it's clear whose defaults are being edited
 - **Default WFH hours** input: number of hours pre-applied to `wfh` days on blank weeks
 - **Standard week table**: day type selector for each day of the week (Mon–Sun)
-- **Save Settings** persists the profile; a brief "Saved" confirmation is shown on success
-- On load, the form is populated with the user's current profile (if one exists)
+- **Save Settings** persists the profile for the **currently selected user** (not necessarily the logged-in user); a brief "Saved" confirmation is shown on success
+- On load, the form is populated with the selected user's profile (if one exists); if no profile is configured, safe defaults are shown (weekdays = `office`, weekends = `weekend`)
+- Changing the user dropdown reloads the settings form with the newly selected user's profile
 - **Notifications section** (see Push Notifications below)
 
 #### Report

@@ -91,7 +91,7 @@ async function init() {
     reportFY = defaultFY();
 
     // Load profile in the background; a missing profile (404) is fine.
-    userProfile = await api.getProfile().catch(() => null);
+    userProfile = await api.getUserProfile(selectedUserId).catch(() => null);
 
     populateUserSelect();
     populateFYSelect();
@@ -170,9 +170,12 @@ function bindEvents() {
   on('nav-report',   'click', e => { e.preventDefault(); showView('report');   });
   on('nav-settings', 'click', e => { e.preventDefault(); showView('settings'); });
 
-  on('user-select', 'change', e => {
+  on('user-select', 'change', async e => {
     selectedUserId = parseInt(e.target.value, 10);
-    view === 'diary' ? loadWeek() : loadReport();
+    userProfile = await api.getUserProfile(selectedUserId).catch(() => null);
+    if (view === 'diary') loadWeek();
+    else if (view === 'report') loadReport();
+    else if (view === 'settings') loadSettings();
   });
 
   on('prev-week',    'click', () => { weekStart = addDays(weekStart, -7); loadWeek(); });
@@ -557,9 +560,18 @@ async function jumpFirstIncomplete() {
 
 // ── Settings ───────────────────────────────────────────────────────────────
 function loadSettings() {
+  const selectedUser = allUsers.find(u => u.id === selectedUserId);
+  const label = document.getElementById('settings-user-label');
+  if (label) label.textContent = selectedUser ? `Settings for ${selectedUser.display_name}` : '';
   if (!userProfile) {
-    document.getElementById('profile-sat-type').value = 'weekend';
-    document.getElementById('profile-sun-type').value = 'weekend';
+    document.getElementById('profile-default-hours').value = '';
+    WEEK_DAYS.forEach(({ key }) => {
+      const el = document.getElementById(`profile-${key.replace('_type', '-type')}`);
+      if (el) {
+        const isWeekend = key === 'sat_type' || key === 'sun_type';
+        el.value = isWeekend ? 'weekend' : 'office';
+      }
+    });
   } else {
     document.getElementById('profile-default-hours').value = userProfile.default_hours;
     WEEK_DAYS.forEach(({ key }) => {
@@ -696,7 +708,7 @@ async function saveProfile() {
   });
 
   try {
-    userProfile = await api.saveProfile(data);
+    userProfile = await api.saveUserProfile(selectedUserId, data);
     setProfileStatus('Saved', false);
     setTimeout(clearProfileStatus, 3000);
   } catch (e) {
