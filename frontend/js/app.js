@@ -234,8 +234,8 @@ function bindEvents() {
 
 // ── Add User Dialog ───────────────────────────────────────────────────────
 function openAddUserDialog() {
-  document.getElementById('new-username').value = '';
-  document.getElementById('new-display-name').value = '';
+  document.getElementById('add-user-username').value = '';
+  document.getElementById('add-user-display-name').value = '';
   document.getElementById('add-user-error').textContent = '';
   document.getElementById('add-user-dialog').showModal();
 }
@@ -246,8 +246,8 @@ function closeAddUserDialog() {
 
 async function handleAddUser(e) {
   e.preventDefault();
-  const username = document.getElementById('new-username').value.trim();
-  const displayName = document.getElementById('new-display-name').value.trim();
+  const username = document.getElementById('add-user-username').value.trim();
+  const displayName = document.getElementById('add-user-display-name').value.trim();
   const errorEl = document.getElementById('add-user-error');
   errorEl.textContent = '';
 
