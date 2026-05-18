@@ -168,6 +168,10 @@ const api = {
     }
   },
 
+  getWeekStatus(userId, financialYear) {
+    return fetchJSON(`/api/users/${userId}/entries/week-status?financial_year=${financialYear}`);
+  },
+
   async logClientError(report) {
     try {
       // Use sendBeacon for fire-and-forget reliability; this endpoint has no auth.

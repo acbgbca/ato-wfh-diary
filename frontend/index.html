@@ -38,6 +38,17 @@
         <strong id="week-label"></strong>
         <button id="next-week" class="secondary outline">Next &#8594;</button>
       </div>
+      <dialog id="week-picker" class="bottom-sheet">
+        <div class="bottom-sheet-header">
+          <span>Jump to week</span>
+          <button id="week-picker-close" class="close-btn" aria-label="Close">&times;</button>
+        </div>
+        <div class="bottom-sheet-actions">
+          <button id="jump-last-week">Last week</button>
+          <button id="jump-first-incomplete">First incomplete</button>
+        </div>
+        <div class="bottom-sheet-list" id="week-list"></div>
+      </dialog>
       <div class="week-status-bar">
         <span id="week-status" class="week-status"></span>
       </div>

@@ -180,6 +180,29 @@ At install time the SW pre-caches bare asset URLs (`/js/app.js`, etc.). The fetc
   - 🟢 **"Week submitted"** — all 7 entries are present for the displayed week
   - The indicator is updated on every `loadWeek()` call using the entry count returned by the existing `getEntries` API — no additional request is needed
 
+#### Week Picker
+
+Tapping the week label (e.g. "12 May – 18 May ▾") opens a **bottom sheet dialog** that allows quick navigation to any week in the current financial year.
+
+**Contents:**
+- **Header** with a close button (×)
+- **Quick-jump buttons:**
+  - **Last week** — navigates to the most recently completed Mon–Sun week
+  - **First incomplete** — navigates to the earliest week with fewer than 7 saved entries (uses the existing `first-incomplete-week` API)
+- **Scrollable week list** showing every week from the first Monday on or after July 1 of the current FY up to the most recently completed week:
+  - Each item displays the week's date range (e.g. "7 Jul – 13 Jul 2025")
+  - A completion dot indicates status: green (●) for complete (7 entries), grey (○) for incomplete
+  - The current week is highlighted with a distinct background
+  - Tapping a week item navigates to that week and closes the dialog
+
+**Completion data** is fetched from `GET /api/users/{id}/entries/week-status?financial_year={fy}` when the picker opens. The dialog auto-scrolls to the current week on open.
+
+**Responsive behaviour:**
+- **Mobile (<600px):** anchored to the bottom of the viewport with rounded top corners (bottom sheet pattern)
+- **Desktop (≥600px):** centred on screen with a max width of 480px and full border radius
+
+The dialog is opened with `showModal()` and closed via the close button, backdrop click, or selecting a week.
+
 #### Smart Initial Load
 
 On app load (without a `?week=` query parameter), instead of always showing the current week, the app navigates to the **oldest week in the current financial year that has fewer than 7 entries saved**. If all weeks up to and including the current week are complete, the app falls back to the current week.

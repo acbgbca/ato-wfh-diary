@@ -528,3 +528,180 @@ func TestE2E_AutoAdvance_AfterSavingPastWeek(t *testing.T) {
 		t.Errorf("auto-advance: first row date got %q, want 2025-07-21", *firstDate)
 	}
 }
+
+// TestE2E_WeekPicker_OpensAndCloses verifies that tapping the week label
+// opens the week picker bottom sheet and that it can be closed.
+func TestE2E_WeekPicker_OpensAndCloses(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL + "?week=2025-08-04")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Click the week label to open the picker
+	page.MustEval(`() => document.getElementById('week-label').click()`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === true`)
+
+	// Verify the dialog is visible
+	dialog := page.MustElement("#week-picker")
+	visible, err := dialog.Visible()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !visible {
+		t.Error("week-picker dialog should be visible after clicking week label")
+	}
+
+	// Close via the close button
+	page.MustEval(`() => document.getElementById('week-picker-close').click()`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === false`)
+}
+
+// TestE2E_WeekPicker_SelectWeek verifies that tapping a week in the list
+// navigates to that week and closes the sheet.
+func TestE2E_WeekPicker_SelectWeek(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL + "?week=2025-08-04")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Open the week picker
+	page.MustEval(`() => document.getElementById('week-label').click()`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === true`)
+
+	// Click the first week in the list (should be the first week of the FY)
+	page.MustEval(`() => document.querySelector('#week-list .week-list-item').click()`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === false`)
+
+	// Verify the diary navigated to a different week
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+	rows := page.MustElements("#entry-tbody tr.day-row")
+	firstDate, err := rows[0].Attribute("data-date")
+	if err != nil || firstDate == nil {
+		t.Fatal("could not read data-date from first row")
+	}
+	// First week of FY2026 starts on 2025-07-07 (first Monday on or after July 1)
+	if *firstDate != "2025-07-07" {
+		t.Errorf("after selecting first week: got %q, want 2025-07-07", *firstDate)
+	}
+}
+
+// TestE2E_WeekPicker_CompletionIndicators verifies that weeks with 7 entries
+// show a green dot and incomplete weeks show a grey dot.
+func TestE2E_WeekPicker_CompletionIndicators(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+
+	u := testUsername(t, "alice")
+	userID := getUserID(t, serverURL, u)
+	// Seed one complete week
+	seedWeekEntries(t, serverURL, u, userID, "2025-07-07")
+
+	page.MustNavigate(serverURL + "?week=2025-08-04")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Open the week picker
+	page.MustEval(`() => document.getElementById('week-label').click()`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === true`)
+
+	// The week list should contain items with completion indicators
+	waitFor(t, page, `() => document.querySelectorAll('#week-list .week-list-item').length > 0`)
+
+	// Check that the seeded week (2025-07-07) has a complete indicator
+	hasComplete := page.MustEval(`() => {
+		const items = document.querySelectorAll('#week-list .week-list-item');
+		for (const item of items) {
+			if (item.dataset.weekStart === '2025-07-07') {
+				return item.querySelector('.completion-dot').classList.contains('complete');
+			}
+		}
+		return false;
+	}`).Bool()
+	if !hasComplete {
+		t.Error("week 2025-07-07 should show complete indicator")
+	}
+
+	// Check that an unseeded week has an incomplete indicator
+	hasIncomplete := page.MustEval(`() => {
+		const items = document.querySelectorAll('#week-list .week-list-item');
+		for (const item of items) {
+			if (item.dataset.weekStart === '2025-07-14') {
+				return !item.querySelector('.completion-dot').classList.contains('complete');
+			}
+		}
+		return false;
+	}`).Bool()
+	if !hasIncomplete {
+		t.Error("week 2025-07-14 should show incomplete indicator")
+	}
+}
+
+// TestE2E_WeekPicker_LastWeekButton verifies the "Last week" quick-jump button.
+func TestE2E_WeekPicker_LastWeekButton(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+
+	// Start on a specific past week
+	page.MustNavigate(serverURL + "?week=2025-08-04")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Open the week picker and click "Last week"
+	page.MustEval(`() => document.getElementById('week-label').click()`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === true`)
+
+	page.MustEval(`() => document.getElementById('jump-last-week').click()`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === false`)
+
+	// The diary should now show the previous week (relative to today)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Just verify it navigated away from 2025-08-04
+	rows := page.MustElements("#entry-tbody tr.day-row")
+	firstDate, err := rows[0].Attribute("data-date")
+	if err != nil || firstDate == nil {
+		t.Fatal("could not read data-date from first row")
+	}
+	if *firstDate == "2025-08-04" {
+		t.Error("last week button should navigate away from current week")
+	}
+}
+
+// TestE2E_WeekPicker_CurrentWeekHighlighted verifies that the currently-viewed
+// week is highlighted in the list.
+func TestE2E_WeekPicker_CurrentWeekHighlighted(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL + "?week=2025-08-04")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Open the week picker
+	page.MustEval(`() => document.getElementById('week-label').click()`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === true`)
+	waitFor(t, page, `() => document.querySelectorAll('#week-list .week-list-item').length > 0`)
+
+	// The week 2025-08-04 should be highlighted
+	isHighlighted := page.MustEval(`() => {
+		const items = document.querySelectorAll('#week-list .week-list-item');
+		for (const item of items) {
+			if (item.dataset.weekStart === '2025-08-04') {
+				return item.classList.contains('current-week');
+			}
+		}
+		return false;
+	}`).Bool()
+	if !isHighlighted {
+		t.Error("week 2025-08-04 should be highlighted as current week")
+	}
+}
+
+// TestE2E_WeekPicker_ChevronVisible verifies that the week label has a chevron indicator.
+func TestE2E_WeekPicker_ChevronVisible(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL + "?week=2025-08-04")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	label := page.MustElement("#week-label").MustText()
+	if !strings.Contains(label, "\u25BE") {
+		t.Errorf("week label should contain chevron (▾), got %q", label)
+	}
+}
