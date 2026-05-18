@@ -26,6 +26,7 @@ func NewRouter(h *Handler, authHeader string, frontendFS fs.FS, buildHash string
 	mux.Handle("GET /api/users/{id}/entries", auth(http.HandlerFunc(h.GetWeekEntries)))
 	mux.Handle("POST /api/users/{id}/entries", auth(http.HandlerFunc(h.UpsertWeekEntries)))
 	mux.Handle("GET /api/users/{id}/entries/first-incomplete-week", auth(http.HandlerFunc(h.GetFirstIncompleteWeek)))
+	mux.Handle("GET /api/users/{id}/entries/week-status", auth(http.HandlerFunc(h.GetWeekCompletionStatus)))
 
 	mux.Handle("GET /api/users/{id}/report", auth(http.HandlerFunc(h.GetReport)))
 	mux.Handle("GET /api/users/{id}/report/export", auth(http.HandlerFunc(h.ExportReport)))

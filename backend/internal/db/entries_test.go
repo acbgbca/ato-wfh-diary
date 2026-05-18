@@ -344,6 +344,153 @@ func seedCompleteWeek(t *testing.T, s *db.Store, userID int64, weekMonday time.T
 	}
 }
 
+func TestGetWeekCompletionStatus_NoEntries(t *testing.T) {
+	s := newTestStore(t)
+	user := seedUser(t, s, "alice", "Alice Smith")
+
+	results, err := s.GetWeekCompletionStatus(context.Background(), user.ID, 2026, date(2025, 8, 1))
+	if err != nil {
+		t.Fatalf("GetWeekCompletionStatus: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results, got %d", len(results))
+	}
+}
+
+func TestGetWeekCompletionStatus_SingleCompleteWeek(t *testing.T) {
+	s := newTestStore(t)
+	user := seedUser(t, s, "alice", "Alice Smith")
+
+	weekStart := monday(2025, 7, 7)
+	seedCompleteWeek(t, s, user.ID, weekStart)
+
+	results, err := s.GetWeekCompletionStatus(context.Background(), user.ID, 2026, date(2025, 7, 13))
+	if err != nil {
+		t.Fatalf("GetWeekCompletionStatus: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if !results[0].WeekStart.Equal(weekStart) {
+		t.Errorf("week_start: got %v, want %v", results[0].WeekStart, weekStart)
+	}
+	if results[0].Count != 7 {
+		t.Errorf("count: got %d, want 7", results[0].Count)
+	}
+}
+
+func TestGetWeekCompletionStatus_PartialWeek(t *testing.T) {
+	s := newTestStore(t)
+	user := seedUser(t, s, "alice", "Alice Smith")
+
+	// Only 3 entries in a week
+	entries := []model.WorkDayEntry{
+		{UserID: user.ID, EntryDate: date(2025, 7, 7), DayType: model.DayTypeWFH, Hours: 8},
+		{UserID: user.ID, EntryDate: date(2025, 7, 8), DayType: model.DayTypeOffice},
+		{UserID: user.ID, EntryDate: date(2025, 7, 9), DayType: model.DayTypeOffice},
+	}
+	if err := s.UpsertEntries(context.Background(), entries); err != nil {
+		t.Fatalf("UpsertEntries: %v", err)
+	}
+
+	results, err := s.GetWeekCompletionStatus(context.Background(), user.ID, 2026, date(2025, 7, 13))
+	if err != nil {
+		t.Fatalf("GetWeekCompletionStatus: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Count != 3 {
+		t.Errorf("count: got %d, want 3", results[0].Count)
+	}
+}
+
+func TestGetWeekCompletionStatus_ExcludesFutureWeeks(t *testing.T) {
+	s := newTestStore(t)
+	user := seedUser(t, s, "alice", "Alice Smith")
+
+	week1 := monday(2025, 7, 7)
+	week2 := monday(2025, 7, 14)
+	seedCompleteWeek(t, s, user.ID, week1)
+	seedCompleteWeek(t, s, user.ID, week2)
+
+	// today is in week1, so week2 entries should be excluded
+	results, err := s.GetWeekCompletionStatus(context.Background(), user.ID, 2026, date(2025, 7, 9))
+	if err != nil {
+		t.Fatalf("GetWeekCompletionStatus: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result (future week excluded), got %d", len(results))
+	}
+	if !results[0].WeekStart.Equal(week1) {
+		t.Errorf("week_start: got %v, want %v", results[0].WeekStart, week1)
+	}
+}
+
+func TestGetWeekCompletionStatus_MultipleWeeksOrdered(t *testing.T) {
+	s := newTestStore(t)
+	user := seedUser(t, s, "alice", "Alice Smith")
+
+	week1 := monday(2025, 7, 7)
+	week2 := monday(2025, 7, 14)
+	seedCompleteWeek(t, s, user.ID, week1)
+	seedCompleteWeek(t, s, user.ID, week2)
+
+	results, err := s.GetWeekCompletionStatus(context.Background(), user.ID, 2026, date(2025, 7, 20))
+	if err != nil {
+		t.Fatalf("GetWeekCompletionStatus: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	if !results[0].WeekStart.Equal(week1) {
+		t.Errorf("first week_start: got %v, want %v", results[0].WeekStart, week1)
+	}
+	if !results[1].WeekStart.Equal(week2) {
+		t.Errorf("second week_start: got %v, want %v", results[1].WeekStart, week2)
+	}
+}
+
+func TestGetWeekCompletionStatus_IsolatedByUser(t *testing.T) {
+	s := newTestStore(t)
+	alice := seedUser(t, s, "alice", "Alice Smith")
+	bob := seedUser(t, s, "bob", "Bob Brown")
+
+	weekStart := monday(2025, 7, 7)
+	seedCompleteWeek(t, s, alice.ID, weekStart)
+
+	// Bob has no entries
+	results, err := s.GetWeekCompletionStatus(context.Background(), bob.ID, 2026, date(2025, 7, 13))
+	if err != nil {
+		t.Fatalf("GetWeekCompletionStatus: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for bob, got %d", len(results))
+	}
+}
+
+func TestGetWeekCompletionStatus_OnlyGivenFY(t *testing.T) {
+	s := newTestStore(t)
+	user := seedUser(t, s, "alice", "Alice Smith")
+
+	// FY2025 entry (Jul 2024 - Jun 2025)
+	entries := []model.WorkDayEntry{
+		{UserID: user.ID, EntryDate: date(2024, 8, 5), DayType: model.DayTypeWFH, Hours: 8},
+	}
+	if err := s.UpsertEntries(context.Background(), entries); err != nil {
+		t.Fatalf("UpsertEntries: %v", err)
+	}
+
+	// Query FY2026 — should get nothing
+	results, err := s.GetWeekCompletionStatus(context.Background(), user.ID, 2026, date(2025, 8, 1))
+	if err != nil {
+		t.Fatalf("GetWeekCompletionStatus: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for wrong FY, got %d", len(results))
+	}
+}
+
 func TestGetFirstIncompleteWeek_NoEntries(t *testing.T) {
 	s := newTestStore(t)
 	user := seedUser(t, s, "alice", "Alice Smith")

@@ -184,6 +184,48 @@ func mondayOf(d time.Time) time.Time {
 	return time.Date(d.Year(), d.Month(), d.Day()+offset, 0, 0, 0, 0, d.Location())
 }
 
+// WeekStatus represents the completion status of a single week.
+type WeekStatus struct {
+	WeekStart time.Time
+	Count     int
+}
+
+// GetWeekCompletionStatus returns the number of entries per week (grouped by
+// Monday) for the given user and financial year, limited to weeks up to and
+// including the week containing today. Only weeks with at least 1 entry are
+// returned, ordered by week_start ascending.
+func (s *Store) GetWeekCompletionStatus(ctx context.Context, userID int64, financialYear int, today time.Time) ([]WeekStatus, error) {
+	todayStr := today.Format("2006-01-02")
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT date(entry_date, '-' || ((strftime('%w', entry_date) + 6) % 7) || ' days') AS week_start,
+		       COUNT(*) AS count
+		FROM work_day_entries
+		WHERE user_id = ? AND financial_year = ?
+		  AND entry_date <= ?
+		GROUP BY week_start
+		ORDER BY week_start
+	`, userID, financialYear, todayStr)
+	if err != nil {
+		return nil, fmt.Errorf("get week completion status: %w", err)
+	}
+	defer rows.Close()
+
+	var results []WeekStatus
+	for rows.Next() {
+		var ws WeekStatus
+		var weekStartStr string
+		if err := rows.Scan(&weekStartStr, &ws.Count); err != nil {
+			return nil, fmt.Errorf("scan week status: %w", err)
+		}
+		ws.WeekStart, err = parseDate(weekStartStr)
+		if err != nil {
+			return nil, fmt.Errorf("parse week_start: %w", err)
+		}
+		results = append(results, ws)
+	}
+	return results, rows.Err()
+}
+
 // scanEntries drains a *sql.Rows cursor into a slice of WorkDayEntry.
 func scanEntries(rows interface {
 	Next() bool

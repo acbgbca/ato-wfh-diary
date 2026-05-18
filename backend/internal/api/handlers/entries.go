@@ -76,6 +76,56 @@ func firstMondayOfFY(financialYear int) time.Time {
 	return jul1.AddDate(0, 0, 1-dow)
 }
 
+// GetWeekCompletionStatus returns the count of entries per week for a user in
+// a given financial year, limited to weeks up to and including the current week.
+//
+// Query params:
+//   - financial_year (optional): defaults to current FY
+func (h *Handler) GetWeekCompletionStatus(w http.ResponseWriter, r *http.Request) {
+	userID, ok := pathUserID(r)
+	if !ok {
+		respondError(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+
+	user, err := h.Store.GetUserByID(r.Context(), userID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "could not retrieve user")
+		return
+	}
+	if user == nil {
+		respondError(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	today := time.Now().UTC()
+
+	financialYear, hasFY := queryInt(r, "financial_year")
+	if !hasFY {
+		financialYear = model.FinancialYear(today)
+	}
+
+	results, err := h.Store.GetWeekCompletionStatus(r.Context(), userID, financialYear, today)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "could not retrieve week status")
+		return
+	}
+
+	type weekStatusResponse struct {
+		WeekStart string `json:"week_start"`
+		Count     int    `json:"count"`
+	}
+
+	resp := make([]weekStatusResponse, len(results))
+	for i, ws := range results {
+		resp[i] = weekStatusResponse{
+			WeekStart: ws.WeekStart.Format("2006-01-02"),
+			Count:     ws.Count,
+		}
+	}
+	respondJSON(w, resp)
+}
+
 // entryRequest is the JSON shape accepted when upserting entries.
 type entryRequest struct {
 	EntryDate string        `json:"entry_date"` // YYYY-MM-DD
