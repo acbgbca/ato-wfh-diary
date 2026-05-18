@@ -103,3 +103,98 @@ func TestGetMe_Unauthorised(t *testing.T) {
 		t.Errorf("status: got %d, want %d", resp.StatusCode, http.StatusUnauthorized)
 	}
 }
+
+func TestCreateUser_Success(t *testing.T) {
+	srv := newTestServer(t)
+
+	// Authenticate as alice so we can make requests.
+	mustCreateUser(t, srv, "alice")
+
+	resp := do(t, srv, http.MethodPost, "/api/users", "alice", map[string]string{
+		"username":     "bob",
+		"display_name": "Bob Smith",
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusCreated)
+	}
+
+	var user struct {
+		ID          int64  `json:"id"`
+		Username    string `json:"username"`
+		DisplayName string `json:"display_name"`
+	}
+	decodeJSON(t, resp, &user)
+
+	if user.ID == 0 {
+		t.Error("expected non-zero ID")
+	}
+	if user.Username != "bob" {
+		t.Errorf("username: got %q, want %q", user.Username, "bob")
+	}
+	if user.DisplayName != "Bob Smith" {
+		t.Errorf("display_name: got %q, want %q", user.DisplayName, "Bob Smith")
+	}
+
+	// Verify the user appears in GET /api/users.
+	listResp := do(t, srv, http.MethodGet, "/api/users", "alice", nil)
+	var users []map[string]any
+	decodeJSON(t, listResp, &users)
+	if len(users) != 2 {
+		t.Fatalf("expected 2 users, got %d", len(users))
+	}
+}
+
+func TestCreateUser_Conflict(t *testing.T) {
+	srv := newTestServer(t)
+
+	mustCreateUser(t, srv, "alice")
+
+	// Try to create a user with the same username.
+	resp := do(t, srv, http.MethodPost, "/api/users", "alice", map[string]string{
+		"username":     "alice",
+		"display_name": "Alice Again",
+	})
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("status: got %d, want %d", resp.StatusCode, http.StatusConflict)
+	}
+}
+
+func TestCreateUser_EmptyUsername(t *testing.T) {
+	srv := newTestServer(t)
+
+	mustCreateUser(t, srv, "alice")
+
+	resp := do(t, srv, http.MethodPost, "/api/users", "alice", map[string]string{
+		"username":     "",
+		"display_name": "No Username",
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status: got %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+}
+
+func TestCreateUser_EmptyDisplayName(t *testing.T) {
+	srv := newTestServer(t)
+
+	mustCreateUser(t, srv, "alice")
+
+	resp := do(t, srv, http.MethodPost, "/api/users", "alice", map[string]string{
+		"username":     "bob",
+		"display_name": "",
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status: got %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+}
+
+func TestCreateUser_Unauthorised(t *testing.T) {
+	srv := newTestServer(t)
+
+	resp := do(t, srv, http.MethodPost, "/api/users", "", map[string]string{
+		"username":     "bob",
+		"display_name": "Bob",
+	})
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("status: got %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+	}
+}

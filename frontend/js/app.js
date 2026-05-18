@@ -207,6 +207,11 @@ function bindEvents() {
   });
   on('save-notif', 'click', saveNotificationPrefs);
   on('test-notif', 'click', sendTestNotification);
+  on('add-user-btn',    'click', openAddUserDialog);
+  on('add-user-close',  'click', closeAddUserDialog);
+  on('add-user-cancel', 'click', closeAddUserDialog);
+  on('add-user-form',   'submit', handleAddUser);
+
   on('notif-install-btn', 'click', async () => {
     if (!installPrompt) return;
     installPrompt.prompt();
@@ -225,6 +230,39 @@ function bindEvents() {
       hoursEl.value = userProfile.default_hours;
     }
   });
+}
+
+// ── Add User Dialog ───────────────────────────────────────────────────────
+function openAddUserDialog() {
+  document.getElementById('add-user-username').value = '';
+  document.getElementById('add-user-display-name').value = '';
+  document.getElementById('add-user-error').textContent = '';
+  document.getElementById('add-user-dialog').showModal();
+}
+
+function closeAddUserDialog() {
+  document.getElementById('add-user-dialog').close();
+}
+
+async function handleAddUser(e) {
+  e.preventDefault();
+  const username = document.getElementById('add-user-username').value.trim();
+  const displayName = document.getElementById('add-user-display-name').value.trim();
+  const errorEl = document.getElementById('add-user-error');
+  errorEl.textContent = '';
+
+  try {
+    const user = await api.createUser(username, displayName);
+    allUsers.push(user);
+    populateUserSelect();
+    document.getElementById('user-select').value = user.id;
+    selectedUserId = user.id;
+    closeAddUserDialog();
+    if (view === 'diary') loadWeek();
+    else if (view === 'report') loadReport();
+  } catch (err) {
+    errorEl.textContent = err.message;
+  }
 }
 
 // ── Views ──────────────────────────────────────────────────────────────────

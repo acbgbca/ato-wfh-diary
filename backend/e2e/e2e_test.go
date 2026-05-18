@@ -862,6 +862,90 @@ func TestE2E_WeekPicker_LoadingState(t *testing.T) {
 	page.MustEval(`() => { if (window._testOrigFetch) { window.fetch = window._testOrigFetch; delete window._testOrigFetch; } }`)
 }
 
+// TestE2E_AddUser_CreatesAndSelectsUser verifies that opening the add user
+// dialog, filling in the form, and submitting creates a new user that appears
+// in the dropdown and is automatically selected.
+func TestE2E_AddUser_CreatesAndSelectsUser(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Remember how many options exist before adding
+	initialCount := page.MustEval(`() => document.getElementById('user-select').options.length`).Int()
+
+	// Click the add user button
+	page.MustElement("#add-user-btn").MustClick()
+	waitFor(t, page, `() => document.getElementById('add-user-dialog').open === true`)
+
+	// Fill in the form — use test-unique username to avoid conflicts in shared DB
+	uniqueUser := testUsername(t, "bob") + "_new"
+	page.MustElement("#add-user-username").MustInput(uniqueUser)
+	page.MustElement("#add-user-display-name").MustInput("Bob Smith")
+
+	// Submit
+	page.MustElement("#add-user-submit").MustClick()
+	waitFor(t, page, `() => document.getElementById('add-user-dialog').open === false`)
+
+	// Verify the new user appears in the dropdown and is selected
+	waitFor(t, page, fmt.Sprintf(`() => {
+		const sel = document.getElementById('user-select');
+		return sel.options.length === %d && sel.options[sel.selectedIndex].text === 'Bob Smith';
+	}`, initialCount+1))
+}
+
+// TestE2E_AddUser_DuplicateShowsError verifies that trying to create a user
+// with an existing username shows an error message in the dialog.
+func TestE2E_AddUser_DuplicateShowsError(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// The auto-created user's username (varies by test environment)
+	existingUser := testUsername(t, "alice")
+
+	page.MustElement("#add-user-btn").MustClick()
+	waitFor(t, page, `() => document.getElementById('add-user-dialog').open === true`)
+
+	page.MustElement("#add-user-username").MustInput(existingUser)
+	page.MustElement("#add-user-display-name").MustInput("Alice Again")
+	page.MustElement("#add-user-submit").MustClick()
+
+	// The dialog should still be open with an error message
+	waitFor(t, page, `() => document.getElementById('add-user-error').textContent.includes('already exists')`)
+
+	// Dialog should still be open
+	isOpen := page.MustEval(`() => document.getElementById('add-user-dialog').open`).Bool()
+	if !isOpen {
+		t.Error("dialog should remain open on error")
+	}
+}
+
+// TestE2E_AddUser_CancelClosesDialog verifies that the cancel button closes
+// the dialog without creating a user.
+func TestE2E_AddUser_CancelClosesDialog(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Remember option count before opening dialog
+	initialCount := page.MustEval(`() => document.getElementById('user-select').options.length`).Int()
+
+	page.MustElement("#add-user-btn").MustClick()
+	waitFor(t, page, `() => document.getElementById('add-user-dialog').open === true`)
+
+	page.MustElement("#add-user-cancel").MustClick()
+	waitFor(t, page, `() => document.getElementById('add-user-dialog').open === false`)
+
+	// Dropdown should be unchanged after cancel
+	optionCount := page.MustEval(`() => document.getElementById('user-select').options.length`).Int()
+	if optionCount != initialCount {
+		t.Errorf("expected %d users in dropdown after cancel, got %d", initialCount, optionCount)
+	}
+}
+
 // TestE2E_WeekPicker_ErrorState verifies that an error message is shown when
 // the week-status API fails, but quick-jump buttons still work.
 func TestE2E_WeekPicker_ErrorState(t *testing.T) {

@@ -53,6 +53,21 @@ const api = {
     return fetchJSON('/api/users');
   },
 
+  async createUser(username, displayName) {
+    const r = await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, display_name: displayName }),
+      redirect: 'manual',
+    });
+    if (isAuthFailure(r)) return new Promise(() => {});
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+  },
+
   getEntries(userId, weekStart) {
     return fetchJSON(`/api/users/${userId}/entries?week_start=${weekStart}`);
   },

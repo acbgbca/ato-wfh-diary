@@ -5,6 +5,7 @@ package e2e_test
 import (
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"ato-wfh-diary/frontend"
 	"ato-wfh-diary/internal/api/handlers"
@@ -56,7 +57,7 @@ func newPage(t *testing.T, username string) (*rod.Browser, *rod.Page) {
 	browser := rod.New().ControlURL(controlURL).MustConnect()
 	t.Cleanup(func() { browser.MustClose() })
 
-	page := browser.MustPage("")
+	page := browser.MustPage("").Timeout(15 * time.Second)
 	cleanup, err := page.SetExtraHeaders([]string{localAuthHeader, username})
 	if err != nil {
 		t.Fatalf("set extra headers: %v", err)
