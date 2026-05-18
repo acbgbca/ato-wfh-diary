@@ -72,6 +72,8 @@ Each user can optionally configure a profile via the **Settings** page. The prof
 
 - `GET /api/me/profile` — returns the current user's profile; 404 if not configured
 - `PUT /api/me/profile` — creates or updates the current user's profile
+- `GET /api/users/{id}/profile` — returns the specified user's profile; 404 if not configured or user doesn't exist
+- `PUT /api/users/{id}/profile` — creates or updates the specified user's profile; 404 if user doesn't exist
 
 ## Financial Year Reporting
 
