@@ -900,36 +900,3 @@ func TestE2E_WeekPicker_ErrorState(t *testing.T) {
 	// Restore original fetch
 	page.MustEval(`() => { if (window._testOrigFetch) { window.fetch = window._testOrigFetch; delete window._testOrigFetch; } }`)
 }
-
-// TestE2E_WeekPicker_ClosesOnUserChange verifies that the picker closes when
-// the user selection changes.
-func TestE2E_WeekPicker_ClosesOnUserChange(t *testing.T) {
-	serverURL := newE2EServer(t)
-
-	// Create both users before navigating so the user select populates correctly
-	u1 := testUsername(t, "alice")
-	getUserID(t, serverURL, u1)
-	u2 := testUsername(t, "bob")
-	getUserID(t, serverURL, u2)
-
-	_, page := newPage(t, "alice")
-	page.MustNavigate(serverURL + "?week=2025-08-04")
-	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
-
-	// Wait for user select to have 2 options
-	waitFor(t, page, `() => document.getElementById('user-select').options.length === 2`)
-
-	// Open the picker
-	page.MustEval(`() => document.getElementById('week-label').click()`)
-	waitFor(t, page, `() => document.getElementById('week-picker').open === true`)
-
-	// Change the user
-	page.MustEval(`() => {
-		const sel = document.getElementById('user-select');
-		sel.value = sel.options[1].value;
-		sel.dispatchEvent(new Event('change'));
-	}`)
-
-	// Picker should close
-	waitFor(t, page, `() => document.getElementById('week-picker').open === false`)
-}

@@ -220,7 +220,6 @@ The dialog is opened with `showModal()` and closed via the close button, backdro
 - If the picker is closed before the API responds, the result is discarded
 
 **Edge cases:**
-- If the user changes the "Viewing" user while the picker is open, the picker closes automatically (stale data)
 - If the current FY has just started with only one past week, the list displays correctly
 
 #### Smart Initial Load

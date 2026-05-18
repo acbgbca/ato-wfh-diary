@@ -172,9 +172,6 @@ function bindEvents() {
 
   on('user-select', 'change', e => {
     selectedUserId = parseInt(e.target.value, 10);
-    // Close week picker if open (stale data for previous user)
-    const picker = document.getElementById('week-picker');
-    if (picker.open) picker.close();
     view === 'diary' ? loadWeek() : loadReport();
   });
 
