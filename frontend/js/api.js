@@ -2,8 +2,25 @@
 // sent to the current URL as a full page navigation so Traefik / Authelia can
 // intercept it, redirect to the login page, and return the user here after
 // successful authentication.
+//
+// In iOS standalone (PWA) mode, window.location.replace() may silently fail
+// for cross-origin auth redirects. If we're still on the page after a short
+// delay, show a visible error so the user knows they need to reauthenticate.
 function handleAuthExpiry() {
   window.location.replace(window.location.href);
+  setTimeout(() => {
+    // If we're still here, the navigation didn't work (likely iOS standalone mode).
+    const main = document.querySelector('main');
+    if (main) {
+      main.innerHTML =
+        '<article style="text-align:center;margin-top:2rem">' +
+        '<h2>Session Expired</h2>' +
+        '<p>Your login session has expired. Please reauthenticate to continue.</p>' +
+        '<p><a href="' + window.location.href + '" style="font-weight:bold">Tap here to log in again</a></p>' +
+        '<p style="font-size:0.85em;color:var(--muted-color)">If that doesn\u2019t work, close this app and reopen it from your home screen.</p>' +
+        '</article>';
+    }
+  }, 2000);
 }
 
 // Returns true when r indicates that the reverse proxy redirected the request
