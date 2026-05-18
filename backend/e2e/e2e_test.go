@@ -568,6 +568,9 @@ func TestE2E_WeekPicker_SelectWeek(t *testing.T) {
 	page.MustEval(`() => document.getElementById('week-label').click()`)
 	waitFor(t, page, `() => document.getElementById('week-picker').open === true`)
 
+	// Wait for week list items to load (they are fetched asynchronously)
+	waitFor(t, page, `() => document.querySelectorAll('#week-list .week-list-item').length > 0`)
+
 	// Click the first week in the list (should be the first week of the FY)
 	page.MustEval(`() => document.querySelector('#week-list .week-list-item').click()`)
 	waitFor(t, page, `() => document.getElementById('week-picker').open === false`)
@@ -704,4 +707,229 @@ func TestE2E_WeekPicker_ChevronVisible(t *testing.T) {
 	if !strings.Contains(label, "\u25BE") {
 		t.Errorf("week label should contain chevron (▾), got %q", label)
 	}
+}
+
+// TestE2E_WeekPicker_AriaAttributes verifies ARIA attributes on the week picker
+// dialog and the week label trigger.
+func TestE2E_WeekPicker_AriaAttributes(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL + "?week=2025-08-04")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Week label should have button role and aria-haspopup
+	role := page.MustEval(`() => document.getElementById('week-label').getAttribute('role')`).Str()
+	if role != "button" {
+		t.Errorf("week-label role: got %q, want 'button'", role)
+	}
+
+	haspopup := page.MustEval(`() => document.getElementById('week-label').getAttribute('aria-haspopup')`).Str()
+	if haspopup != "dialog" {
+		t.Errorf("week-label aria-haspopup: got %q, want 'dialog'", haspopup)
+	}
+
+	tabindex := page.MustEval(`() => document.getElementById('week-label').getAttribute('tabindex')`).Str()
+	if tabindex != "0" {
+		t.Errorf("week-label tabindex: got %q, want '0'", tabindex)
+	}
+
+	// Dialog should have aria-labelledby pointing to the heading
+	page.MustEval(`() => document.getElementById('week-label').click()`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === true`)
+
+	labelledBy := page.MustEval(`() => document.getElementById('week-picker').getAttribute('aria-labelledby')`).Str()
+	if labelledBy == "" {
+		t.Error("week-picker should have aria-labelledby attribute")
+	}
+
+	// The referenced element should exist and contain "Jump to week"
+	headingText := page.MustEval(fmt.Sprintf(`() => document.getElementById('%s')?.textContent || ''`, labelledBy)).Str()
+	if !strings.Contains(headingText, "Jump to week") {
+		t.Errorf("aria-labelledby target text: got %q, want to contain 'Jump to week'", headingText)
+	}
+
+	// Week list items should be buttons for native keyboard interaction
+	waitFor(t, page, `() => document.querySelectorAll('#week-list .week-list-item').length > 0`)
+	firstItemTag := page.MustEval(`() => document.querySelector('#week-list .week-list-item').tagName`).Str()
+	if firstItemTag != "BUTTON" {
+		t.Errorf("week list items should be <button> elements, got %q", firstItemTag)
+	}
+}
+
+// TestE2E_WeekPicker_KeyboardOpen verifies that Enter and Space keys open the picker.
+func TestE2E_WeekPicker_KeyboardOpen(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL + "?week=2025-08-04")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Focus the week label and press Enter
+	page.MustEval(`() => document.getElementById('week-label').focus()`)
+	page.MustEval(`() => document.getElementById('week-label').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === true`)
+
+	// Close it
+	page.MustEval(`() => document.getElementById('week-picker-close').click()`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === false`)
+
+	// Now try Space key
+	page.MustEval(`() => document.getElementById('week-label').focus()`)
+	page.MustEval(`() => document.getElementById('week-label').dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }))`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === true`)
+}
+
+// TestE2E_WeekPicker_FocusManagement verifies that focus moves into the dialog
+// on open and returns to the week label on close.
+func TestE2E_WeekPicker_FocusManagement(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL + "?week=2025-08-04")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Open the picker
+	page.MustEval(`() => document.getElementById('week-label').click()`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === true`)
+
+	// Focus should be inside the dialog
+	waitFor(t, page, `() => {
+		const dialog = document.getElementById('week-picker');
+		return dialog.contains(document.activeElement);
+	}`)
+
+	// Close via close button
+	page.MustEval(`() => document.getElementById('week-picker-close').click()`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === false`)
+
+	// Focus should return to the week label
+	waitFor(t, page, `() => document.activeElement === document.getElementById('week-label')`)
+}
+
+// TestE2E_WeekPicker_Animation verifies that the dialog has animation classes.
+func TestE2E_WeekPicker_Animation(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL + "?week=2025-08-04")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Open the picker and check for the opening animation class
+	page.MustEval(`() => document.getElementById('week-label').click()`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === true`)
+
+	// The dialog should have a slide-up animation defined in CSS
+	hasAnimation := page.MustEval(`() => {
+		const style = getComputedStyle(document.getElementById('week-picker'));
+		return style.animationName !== 'none' && style.animationName !== '';
+	}`).Bool()
+	if !hasAnimation {
+		t.Error("week-picker should have a CSS animation when open")
+	}
+}
+
+// TestE2E_WeekPicker_LoadingState verifies that a loading state is shown while
+// the week status API is being fetched.
+func TestE2E_WeekPicker_LoadingState(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL + "?week=2025-08-04")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Check that the week-list area shows loading text when picker opens
+	// We need to check quickly before the API responds
+	page.MustEval(`() => {
+		// Override fetch to delay the week-status response
+		const origFetch = window.fetch;
+		window._testOrigFetch = origFetch;
+		window.fetch = function(url, opts) {
+			if (typeof url === 'string' && url.includes('week-status')) {
+				return new Promise(resolve => {
+					setTimeout(() => resolve(origFetch(url, opts)), 2000);
+				});
+			}
+			return origFetch(url, opts);
+		};
+	}`)
+
+	page.MustEval(`() => document.getElementById('week-label').click()`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === true`)
+
+	// The list area should show a loading indicator
+	loadingText := page.MustEval(`() => document.getElementById('week-list').textContent`).Str()
+	if !strings.Contains(loadingText, "Loading") {
+		t.Errorf("week-list should show loading text, got %q", loadingText)
+	}
+
+	// Restore original fetch
+	page.MustEval(`() => { if (window._testOrigFetch) { window.fetch = window._testOrigFetch; delete window._testOrigFetch; } }`)
+}
+
+// TestE2E_WeekPicker_ErrorState verifies that an error message is shown when
+// the week-status API fails, but quick-jump buttons still work.
+func TestE2E_WeekPicker_ErrorState(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL + "?week=2025-08-04")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Override fetch to make week-status fail
+	page.MustEval(`() => {
+		const origFetch = window.fetch;
+		window._testOrigFetch = origFetch;
+		window.fetch = function(url, opts) {
+			if (typeof url === 'string' && url.includes('week-status')) {
+				return Promise.resolve(new Response('error', { status: 500 }));
+			}
+			return origFetch(url, opts);
+		};
+	}`)
+
+	page.MustEval(`() => document.getElementById('week-label').click()`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === true`)
+
+	// Wait for the error to appear
+	waitFor(t, page, `() => document.getElementById('week-list').textContent.includes('Could not load weeks')`)
+
+	// Quick-jump buttons should still be visible and functional
+	jumpBtnVisible := page.MustEval(`() => {
+		const btn = document.getElementById('jump-last-week');
+		return btn && !btn.hidden && btn.offsetParent !== null;
+	}`).Bool()
+	if !jumpBtnVisible {
+		t.Error("jump-last-week button should still be visible when API fails")
+	}
+
+	// Restore original fetch
+	page.MustEval(`() => { if (window._testOrigFetch) { window.fetch = window._testOrigFetch; delete window._testOrigFetch; } }`)
+}
+
+// TestE2E_WeekPicker_ClosesOnUserChange verifies that the picker closes when
+// the user selection changes.
+func TestE2E_WeekPicker_ClosesOnUserChange(t *testing.T) {
+	serverURL := newE2EServer(t)
+
+	// Create both users before navigating so the user select populates correctly
+	u1 := testUsername(t, "alice")
+	getUserID(t, serverURL, u1)
+	u2 := testUsername(t, "bob")
+	getUserID(t, serverURL, u2)
+
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL + "?week=2025-08-04")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Wait for user select to have 2 options
+	waitFor(t, page, `() => document.getElementById('user-select').options.length === 2`)
+
+	// Open the picker
+	page.MustEval(`() => document.getElementById('week-label').click()`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === true`)
+
+	// Change the user
+	page.MustEval(`() => {
+		const sel = document.getElementById('user-select');
+		sel.value = sel.options[1].value;
+		sel.dispatchEvent(new Event('change'));
+	}`)
+
+	// Picker should close
+	waitFor(t, page, `() => document.getElementById('week-picker').open === false`)
 }

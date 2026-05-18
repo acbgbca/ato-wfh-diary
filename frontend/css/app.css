@@ -130,8 +130,15 @@
   user-select: none;
 }
 
-#week-label:hover {
+#week-label:hover,
+#week-label:focus-visible {
   color: var(--pico-primary, #1095c1);
+}
+
+#week-label:focus-visible {
+  outline: 2px solid var(--pico-primary, #1095c1);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* ── Bottom sheet (week picker) ───────────────────────────────────────────── */
@@ -151,9 +158,16 @@ dialog.bottom-sheet {
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
 }
 
+/* Slide-up open animation */
+@keyframes bottom-sheet-slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
 dialog.bottom-sheet[open] {
   display: flex;
   flex-direction: column;
+  animation: bottom-sheet-slide-up 0.25s ease-out;
 }
 
 dialog.bottom-sheet::backdrop {
@@ -201,23 +215,48 @@ dialog.bottom-sheet::backdrop {
   min-height: 0;
 }
 
-.week-list-item {
+button.week-list-item {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 0.5rem;
   min-height: 44px;
   cursor: pointer;
+  border: none;
   border-bottom: 1px solid var(--pico-muted-border-color, #ddd);
+  border-radius: 0;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  margin: 0;
 }
 
-.week-list-item:hover {
+button.week-list-item:hover,
+button.week-list-item:focus-visible {
   background: var(--pico-card-background-color, #f5f5f5);
+  outline: none;
 }
 
-.week-list-item.current-week {
+button.week-list-item:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--pico-primary, #1095c1);
+}
+
+button.week-list-item.current-week {
   background: var(--pico-primary-focus, rgba(16, 149, 193, 0.1));
   font-weight: bold;
+}
+
+.week-list-loading,
+.week-list-error {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--pico-muted-color);
+}
+
+.week-list-error {
+  color: var(--pico-color-red-550, #c62828);
 }
 
 .completion-dot {
@@ -230,6 +269,11 @@ dialog.bottom-sheet::backdrop {
 }
 
 /* ── Desktop: center the bottom sheet ─────────────────────────────────────── */
+@keyframes bottom-sheet-fade-in {
+  from { opacity: 0; transform: translate(-50%, -48%); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
+}
+
 @media (min-width: 600px) {
   dialog.bottom-sheet {
     bottom: auto;
@@ -240,6 +284,10 @@ dialog.bottom-sheet::backdrop {
     max-width: 480px;
     border-radius: 12px;
     max-height: 70vh;
+  }
+
+  dialog.bottom-sheet[open] {
+    animation: bottom-sheet-fade-in 0.2s ease-out;
   }
 }
 

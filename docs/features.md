@@ -201,7 +201,27 @@ Tapping the week label (e.g. "12 May – 18 May ▾") opens a **bottom sheet dia
 - **Mobile (<600px):** anchored to the bottom of the viewport with rounded top corners (bottom sheet pattern)
 - **Desktop (≥600px):** centred on screen with a max width of 480px and full border radius
 
-The dialog is opened with `showModal()` and closed via the close button, backdrop click, or selecting a week.
+The dialog is opened with `showModal()` and closed via the close button, backdrop click, Escape key, or selecting a week.
+
+**Accessibility:**
+- The week label trigger has `role="button"`, `tabindex="0"`, and `aria-haspopup="dialog"` — it is keyboard-focusable and responds to Enter/Space to open the picker
+- The `<dialog>` has `aria-labelledby` pointing to the "Jump to week" heading
+- Week list items are `<button>` elements for native keyboard interaction (Tab navigation, Enter/Space to select)
+- Focus management: on open, focus moves to the first interactive element inside the sheet; on close, focus returns to the week label
+- The close button is reachable via Tab and works with Enter/Space
+
+**Animations:**
+- Mobile: a slide-up CSS animation plays when the sheet opens
+- Desktop: a subtle fade-in animation plays when the dialog opens
+
+**Loading and error states:**
+- While the week-status API is being fetched, the list area shows a "Loading…" message
+- If the API call fails, a "Could not load weeks" error message is shown in the list area; the quick-jump buttons (Last week, First incomplete) remain functional since they do not depend on the week-status API
+- If the picker is closed before the API responds, the result is discarded
+
+**Edge cases:**
+- If the user changes the "Viewing" user while the picker is open, the picker closes automatically (stale data)
+- If the current FY has just started with only one past week, the list displays correctly
 
 #### Smart Initial Load
 
