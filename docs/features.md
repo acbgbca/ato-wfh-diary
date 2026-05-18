@@ -300,6 +300,7 @@ The server logs the username (from the forward-auth header, if present), `User-A
 | `GET` | `/api/users/{id}/entries?week_start=YYYY-MM-DD` | Returns entries for the 7-day window starting on `week_start` |
 | `POST` | `/api/users/{id}/entries` | Creates or updates a batch of day entries for the user |
 | `GET` | `/api/users/{id}/entries/first-incomplete-week` | Returns the Monday of the first week with < 7 entries |
+| `GET` | `/api/users/{id}/entries/week-status` | Returns completion counts per week for a financial year |
 
 #### `GET /api/users/{id}/entries/first-incomplete-week`
 
@@ -312,6 +313,19 @@ Response:
 - `{ "week_start": null }` — all weeks up to the current week are complete
 
 Implementation: fetches all entry dates for the user in the FY, then iterates week-by-week in Go to find the first with fewer than 7 entries.
+
+#### `GET /api/users/{id}/entries/week-status`
+
+Returns the number of entries per week for a user in a financial year, for use in week-picker UIs.
+
+Query params:
+- `financial_year` (optional) — defaults to current FY derived from today's date
+
+Response:
+- `[{"week_start": "2025-07-07", "count": 7}, {"week_start": "2025-07-14", "count": 3}, ...]`
+- Returns only weeks with at least 1 entry, up to and including the current week
+- Weeks are ordered by `week_start` ascending
+- `count` is 1–7 indicating how many days have entries in that week
 
 ### API (notifications)
 

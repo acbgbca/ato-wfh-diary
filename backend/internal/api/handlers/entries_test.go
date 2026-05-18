@@ -305,6 +305,122 @@ func TestGetFirstIncompleteWeek_InvalidFromDate(t *testing.T) {
 	}
 }
 
+func TestGetWeekCompletionStatus_ReturnsWeekCounts(t *testing.T) {
+	srv := newTestServer(t)
+	userID := mustCreateUser(t, srv, "alice")
+
+	// Seed a complete week in FY2026 (week of 2025-07-07)
+	entries := make([]map[string]any, 7)
+	for i := range 7 {
+		d := time.Date(2025, 7, 7+i, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+		entries[i] = map[string]any{"entry_date": d, "day_type": "office", "hours": 0}
+	}
+	do(t, srv, http.MethodPost, fmt.Sprintf("/api/users/%d/entries", userID), "alice", entries)
+
+	// Also seed a partial week (3 entries in week of 2025-07-14)
+	partial := []map[string]any{
+		{"entry_date": "2025-07-14", "day_type": "wfh", "hours": 8},
+		{"entry_date": "2025-07-15", "day_type": "office", "hours": 0},
+		{"entry_date": "2025-07-16", "day_type": "office", "hours": 0},
+	}
+	do(t, srv, http.MethodPost, fmt.Sprintf("/api/users/%d/entries", userID), "alice", partial)
+
+	resp := do(t, srv, http.MethodGet,
+		fmt.Sprintf("/api/users/%d/entries/week-status?financial_year=2026", userID),
+		"alice", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	var body []map[string]any
+	decodeJSON(t, resp, &body)
+
+	// Result depends on whether today >= 2025-07-14. Since we can't control time
+	// in handler tests, we just verify the endpoint returns valid data.
+	if len(body) == 0 {
+		t.Fatal("expected at least 1 week status entry")
+	}
+
+	// First entry should be the complete week
+	if body[0]["week_start"] != "2025-07-07" {
+		t.Errorf("first week_start: got %v, want 2025-07-07", body[0]["week_start"])
+	}
+	if body[0]["count"] != float64(7) {
+		t.Errorf("first count: got %v, want 7", body[0]["count"])
+	}
+}
+
+func TestGetWeekCompletionStatus_DefaultsFY(t *testing.T) {
+	srv := newTestServer(t)
+	userID := mustCreateUser(t, srv, "alice")
+
+	// Seed an entry in the current FY
+	today := time.Now().UTC()
+	d := today.Format("2006-01-02")
+	do(t, srv, http.MethodPost,
+		fmt.Sprintf("/api/users/%d/entries", userID),
+		"alice",
+		[]map[string]any{{"entry_date": d, "day_type": "office", "hours": 0}},
+	)
+
+	// No financial_year param — should default to current FY
+	resp := do(t, srv, http.MethodGet,
+		fmt.Sprintf("/api/users/%d/entries/week-status", userID),
+		"alice", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	var body []map[string]any
+	decodeJSON(t, resp, &body)
+	if len(body) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(body))
+	}
+	if body[0]["count"] != float64(1) {
+		t.Errorf("count: got %v, want 1", body[0]["count"])
+	}
+}
+
+func TestGetWeekCompletionStatus_UserNotFound(t *testing.T) {
+	srv := newTestServer(t)
+
+	resp := do(t, srv, http.MethodGet,
+		"/api/users/9999/entries/week-status?financial_year=2026",
+		"alice", nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status: got %d, want %d", resp.StatusCode, http.StatusNotFound)
+	}
+}
+
+func TestGetWeekCompletionStatus_Unauthorised(t *testing.T) {
+	srv := newTestServer(t)
+
+	resp := do(t, srv, http.MethodGet,
+		"/api/users/1/entries/week-status?financial_year=2026",
+		"", nil)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("status: got %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+	}
+}
+
+func TestGetWeekCompletionStatus_EmptyFY(t *testing.T) {
+	srv := newTestServer(t)
+	userID := mustCreateUser(t, srv, "alice")
+
+	resp := do(t, srv, http.MethodGet,
+		fmt.Sprintf("/api/users/%d/entries/week-status?financial_year=2026", userID),
+		"alice", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	var body []map[string]any
+	decodeJSON(t, resp, &body)
+	if len(body) != 0 {
+		t.Errorf("expected empty array, got %d entries", len(body))
+	}
+}
+
 func TestGetWeekEntries_Unauthorised(t *testing.T) {
 	srv := newTestServer(t)
 
