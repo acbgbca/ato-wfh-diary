@@ -124,6 +124,125 @@
   text-decoration: underline;
 }
 
+/* ── Week label (tappable) ─────────────────────────────────────────────────── */
+#week-label {
+  cursor: pointer;
+  user-select: none;
+}
+
+#week-label:hover {
+  color: var(--pico-primary, #1095c1);
+}
+
+/* ── Bottom sheet (week picker) ───────────────────────────────────────────── */
+dialog.bottom-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 12px 12px 0 0;
+  max-height: 70vh;
+  width: 100%;
+  max-width: 100%;
+  background: var(--pico-card-background-color, #fff);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+}
+
+dialog.bottom-sheet[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+dialog.bottom-sheet::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.bottom-sheet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1rem 0.5rem;
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.bottom-sheet-header .close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  margin: 0;
+  line-height: 1;
+  width: auto;
+  color: var(--pico-muted-color);
+}
+
+.bottom-sheet-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+}
+
+.bottom-sheet-actions button {
+  flex: 1;
+  margin: 0;
+  padding: 0.5rem;
+}
+
+.bottom-sheet-list {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 1rem 1rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.week-list-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.5rem;
+  min-height: 44px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--pico-muted-border-color, #ddd);
+}
+
+.week-list-item:hover {
+  background: var(--pico-card-background-color, #f5f5f5);
+}
+
+.week-list-item.current-week {
+  background: var(--pico-primary-focus, rgba(16, 149, 193, 0.1));
+  font-weight: bold;
+}
+
+.completion-dot {
+  font-size: 0.75rem;
+  color: var(--pico-muted-color, #999);
+}
+
+.completion-dot.complete {
+  color: var(--pico-color-jade-550, #2d8a4e);
+}
+
+/* ── Desktop: center the bottom sheet ─────────────────────────────────────── */
+@media (min-width: 600px) {
+  dialog.bottom-sheet {
+    bottom: auto;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, -50%);
+    max-width: 480px;
+    border-radius: 12px;
+    max-height: 70vh;
+  }
+}
+
 /* ── Notes toggle button (visible on mobile only) ──────────────────────────── */
 .notes-toggle {
   display: none;

@@ -179,6 +179,16 @@ function bindEvents() {
   on('next-week',    'click', () => { weekStart = addDays(weekStart,  7); loadWeek(); });
   on('save-entries', 'click', saveWeek);
 
+  on('week-label',        'click', openWeekPicker);
+  on('week-picker-close', 'click', closeWeekPicker);
+  on('jump-last-week',    'click', jumpLastWeek);
+  on('jump-first-incomplete', 'click', jumpFirstIncomplete);
+
+  // Close on backdrop click
+  document.getElementById('week-picker').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeWeekPicker();
+  });
+
   on('fy-select',   'change', e => { reportFY = parseInt(e.target.value, 10); loadReport(); });
   on('export-csv',  'click',  () => { window.location.href = api.exportURL(selectedUserId, reportFY); });
   on('print-pdf',   'click',  printReport);
@@ -227,7 +237,7 @@ function showView(v) {
 async function loadWeek({ keepStatus = false } = {}) {
   const ws = formatDate(weekStart);
   document.getElementById('week-label').textContent =
-    `${fmtLabel(ws)} — ${fmtLabel(formatDate(addDays(weekStart, 6)))}`;
+    `${fmtLabel(ws)} — ${fmtLabel(formatDate(addDays(weekStart, 6)))} \u25BE`;
 
   const entries = await api.getEntries(selectedUserId, ws).catch(() => []);
   const byDate  = Object.fromEntries(entries.map(e => [e.entry_date, e]));
@@ -389,6 +399,94 @@ function renderWeekStatus(count) {
     el.textContent = '🔴 Week not submitted';
     el.className = 'week-status not-submitted';
   }
+}
+
+// ── Week Picker ───────────────────────────────────────────────────────────
+async function openWeekPicker() {
+  const dialog = document.getElementById('week-picker');
+  const listEl = document.getElementById('week-list');
+
+  // Determine weeks in current FY up to the most recent fully-passed week
+  const fy = currentFY();
+  const fyStart = new Date(fy - 1, 6, 1); // July 1
+  const firstMonday = getMonday(fyStart);
+  // If firstMonday is before July 1, advance to the next week
+  const fyFirstMonday = firstMonday < fyStart ? addDays(firstMonday, 7) : firstMonday;
+
+  // Last week = most recently completed week (Sunday has passed)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const thisMonday = getMonday(today);
+  const lastCompletedMonday = addDays(thisMonday, -7);
+
+  // Build list of all past weeks in this FY
+  const weeks = [];
+  let mon = new Date(fyFirstMonday);
+  while (mon <= lastCompletedMonday) {
+    weeks.push(new Date(mon));
+    mon = addDays(mon, 7);
+  }
+
+  // Fetch completion data
+  let statusMap = {};
+  try {
+    const statuses = await api.getWeekStatus(selectedUserId, fy);
+    statuses.forEach(s => { statusMap[s.week_start] = s.count; });
+  } catch (_) {}
+
+  const currentWeekStr = formatDate(weekStart);
+
+  listEl.innerHTML = weeks.map(w => {
+    const ws = formatDate(w);
+    const sun = formatDate(addDays(w, 6));
+    const count = statusMap[ws] || 0;
+    const isComplete = count >= 7;
+    const isCurrent = ws === currentWeekStr;
+    return `<div class="week-list-item${isCurrent ? ' current-week' : ''}" data-week-start="${ws}">
+      <span class="completion-dot${isComplete ? ' complete' : ''}">${isComplete ? '●' : '○'}</span>
+      <span>${fmtLabel(ws)} — ${fmtLabel(sun)}</span>
+    </div>`;
+  }).join('');
+
+  // Add click handlers to week items
+  listEl.querySelectorAll('.week-list-item').forEach(item => {
+    item.addEventListener('click', () => {
+      weekStart = getMonday(new Date(item.dataset.weekStart + 'T00:00:00'));
+      closeWeekPicker();
+      loadWeek();
+    });
+  });
+
+  dialog.showModal();
+
+  // Scroll to the current week
+  const currentItem = listEl.querySelector('.current-week');
+  if (currentItem) {
+    currentItem.scrollIntoView({ block: 'center', behavior: 'instant' });
+  }
+}
+
+function closeWeekPicker() {
+  document.getElementById('week-picker').close();
+}
+
+function jumpLastWeek() {
+  const thisMonday = getMonday(new Date());
+  weekStart = addDays(thisMonday, -7);
+  closeWeekPicker();
+  loadWeek();
+}
+
+async function jumpFirstIncomplete() {
+  try {
+    const fy = currentFY();
+    const data = await api.getFirstIncompleteWeek(selectedUserId, fy, null);
+    if (data.week_start) {
+      weekStart = getMonday(new Date(data.week_start + 'T00:00:00'));
+    }
+  } catch (_) {}
+  closeWeekPicker();
+  loadWeek();
 }
 
 // ── Settings ───────────────────────────────────────────────────────────────
