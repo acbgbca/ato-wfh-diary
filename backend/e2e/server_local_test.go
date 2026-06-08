@@ -48,7 +48,11 @@ func newE2EServer(t *testing.T) string {
 func newPage(t *testing.T, username string) (*rod.Browser, *rod.Page) {
 	t.Helper()
 
-	l := launcher.New().Headless(true)
+	// NoSandbox is required on hosts where Chrome's sandbox cannot initialise —
+	// e.g. GitHub's Ubuntu 24.04 runners, which restrict unprivileged user
+	// namespaces via AppArmor. rod only auto-adds it when it detects a
+	// container, which is not the case on a runner VM, so set it explicitly.
+	l := launcher.New().Headless(true).NoSandbox(true)
 	if path, ok := launcher.LookPath(); ok {
 		l = l.Bin(path)
 	}
