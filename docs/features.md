@@ -11,6 +11,8 @@
 
 When the auth session expires the reverse proxy redirects API requests to an external login page (a different origin). All `fetch()` calls use `redirect: 'manual'` so the browser stops at the redirect and returns an `opaqueredirect` response rather than throwing a CORS error on iOS Safari. The app detects this condition (`response.type === 'opaqueredirect'`, or HTTP 401/403) and triggers a full-page navigation to the current URL — Traefik/Authelia intercepts the page request, redirects the user to the login screen, and returns them to the app after successful authentication.
 
+For this redirect to reach the proxy, the service worker must **not** serve the cached app shell in response to the navigation. The fetch handler therefore uses a network-first strategy for navigation requests (`request.mode === 'navigate'`); see [Service Worker caching strategy](#service-worker-caching-strategy). A cache-first navigation would short-circuit the request, swallow the reauthentication redirect, and leave the installed PWA stuck showing the shell with no data.
+
 ## User Access
 
 - Two users (a couple) share the application
@@ -174,6 +176,12 @@ const CACHE = 'wfh-diary-{{.BuildHash}}';
 This means every new deployment produces a different SW file (different bytes), causing the browser to detect an update, install the new SW, and delete the old versioned cache. The SW is served with `Cache-Control: no-cache` so the browser always checks for a new version.
 
 At install time the SW pre-caches bare asset URLs (`/js/app.js`, etc.). The fetch handler uses `{ ignoreSearch: true }` when looking up cache entries so that versioned URLs like `/js/app.js?v=abc123` are served from the cache without a round trip to the network.
+
+The fetch handler chooses a strategy per request:
+
+- **`/api/` requests** — always go to the network (the SW does not intercept them).
+- **Top-level navigations** (`request.mode === 'navigate'`) — **network-first**: the SW fetches from the network and only falls back to the cached `/` shell if the network is unreachable (offline). This ensures an expired-session redirect to the auth proxy is followed by the browser rather than being swallowed by the cached shell (see [Expired session handling](#expired-session-handling)).
+- **Static assets** (CSS, JS, icons, manifest) — **cache-first**: served from the cache when present, falling back to the network on a miss.
 
 ### Views
 

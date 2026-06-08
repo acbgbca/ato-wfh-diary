@@ -21,6 +21,19 @@ self.addEventListener('fetch', e => {
   // Always fetch API calls from the network
   if (new URL(e.request.url).pathname.startsWith('/api/')) return;
 
+  // Network-first for top-level navigations so that when the reverse-proxy auth
+  // session (Authelia) has expired, the proxy's redirect to the login page
+  // actually reaches the network instead of being short-circuited by the cached
+  // app shell. Serving the cached '/' here would swallow the reauthentication
+  // redirect, leaving the PWA stuck showing the shell with zero data. Fall back
+  // to the cached shell only when the network is unreachable (offline).
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match('/', { ignoreSearch: true }))
+    );
+    return;
+  }
+
   e.respondWith(
     // ignoreSearch so versioned URLs like /js/app.js?v=abc123 match the
     // bare-URL entries stored in the cache at install time.
