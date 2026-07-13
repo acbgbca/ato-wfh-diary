@@ -5,14 +5,8 @@ import (
 	"ato-wfh-diary/internal/model"
 	"ato-wfh-diary/internal/service"
 	"encoding/json"
-	"io"
-	"log"
 	"net/http"
-	"net/url"
-	"strings"
 	"time"
-
-	webpush "github.com/SherClockHolmes/webpush-go"
 )
 
 // GetVapidKey returns the application's VAPID public key so the browser can
@@ -160,16 +154,6 @@ func (h *Handler) PostTestNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	subs, err := h.Store.GetPushSubscriptionsByUserID(r.Context(), user.ID)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "could not retrieve subscriptions")
-		return
-	}
-	if len(subs) == 0 {
-		respondError(w, http.StatusBadRequest, "no push subscriptions registered for this user")
-		return
-	}
-
 	payload, err := json.Marshal(map[string]string{
 		"title": "WFH Diary",
 		"body":  "Test notification — push notifications are working!",
@@ -179,54 +163,20 @@ func (h *Handler) PostTestNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, sub := range subs {
-		device := endpointHost(sub.Endpoint)
-		log.Printf("push notification: sending test notification to user %q, device %q", username, device)
-		pushSub := &webpush.Subscription{
-			Endpoint: sub.Endpoint,
-			Keys: webpush.Keys{
-				P256dh: sub.P256dhKey,
-				Auth:   sub.AuthKey,
-			},
-		}
-		resp, err := webpush.SendNotification(payload, pushSub, &webpush.Options{
-			VAPIDPublicKey:  h.VAPIDPublicKey,
-			VAPIDPrivateKey: h.VAPIDPrivateKey,
-			Subscriber:      normalizeVAPIDSubscriber(h.VAPIDSubject),
-		})
-		if err != nil {
-			log.Printf("push notification: test to user %q, device %q: send error: %v", username, device, err)
-			respondError(w, http.StatusBadGateway, "failed to send notification: "+err.Error())
-			return
-		}
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if resp.StatusCode >= 400 {
-			log.Printf("push notification: test to user %q, device %q: push service rejected (status %d): %s", username, device, resp.StatusCode, string(body))
-			respondError(w, http.StatusBadGateway, "push service rejected notification")
-			return
-		}
-		log.Printf("push notification: test to user %q, device %q: sent successfully (status %d)", username, device, resp.StatusCode)
+	result, err := h.Push.SendToUser(r.Context(), user.ID, username, payload)
+	switch {
+	case result.Sent > 0:
+		respondJSON(w, map[string]string{"status": "ok"})
+	case err != nil:
+		respondError(w, http.StatusBadGateway, "push service rejected notification")
+	case result.Removed > 0:
+		// Every subscription we had was stale (e.g. the PWA was reinstalled).
+		// They have now been removed; the browser must register a new one.
+		respondError(w, http.StatusBadRequest,
+			"this device's notification registration has expired — turn notifications off and back on to re-register it")
+	default:
+		respondError(w, http.StatusBadRequest, "no push subscriptions registered for this user")
 	}
-
-	respondJSON(w, map[string]string{"status": "ok"})
-}
-
-// normalizeVAPIDSubscriber strips a leading "mailto:" prefix before passing
-// to the webpush library, which unconditionally prepends "mailto:" to any value
-// that does not start with "https:". Passing an already-prefixed value produces
-// "mailto:mailto:user@example.com" in the JWT sub claim, which Apple rejects.
-func normalizeVAPIDSubscriber(s string) string {
-	return strings.TrimPrefix(s, "mailto:")
-}
-
-// endpointHost extracts the host from a push endpoint URL for logging.
-// Falls back to the full endpoint string if parsing fails.
-func endpointHost(endpoint string) string {
-	if u, err := url.Parse(endpoint); err == nil && u.Host != "" {
-		return u.Host
-	}
-	return endpoint
 }
 
 // DeleteSubscribe removes a push subscription by endpoint.

@@ -2,17 +2,14 @@ package service
 
 import (
 	"ato-wfh-diary/internal/db"
+	"ato-wfh-diary/internal/push"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
-
-	webpush "github.com/SherClockHolmes/webpush-go"
 )
 
 // NotificationConfig holds the configuration for the push notification service.
@@ -31,6 +28,7 @@ type NotificationService struct {
 	store  *db.Store
 	config NotificationConfig
 	loc    *time.Location
+	sender *push.Sender
 }
 
 // NewNotificationService creates a NotificationService.
@@ -41,7 +39,12 @@ func NewNotificationService(store *db.Store, config NotificationConfig) *Notific
 		log.Printf("notification service: unknown timezone %q, falling back to UTC", config.Timezone)
 		loc = time.UTC
 	}
-	return &NotificationService{store: store, config: config, loc: loc}
+	sender := push.NewSender(store, push.Config{
+		VAPIDPublicKey:  config.VAPIDPublicKey,
+		VAPIDPrivateKey: config.VAPIDPrivateKey,
+		VAPIDSubject:    config.VAPIDSubject,
+	})
+	return &NotificationService{store: store, config: config, loc: loc, sender: sender}
 }
 
 // Run starts the scheduler loop, blocking until ctx is cancelled.
@@ -100,14 +103,6 @@ func (s *NotificationService) processUser(ctx context.Context, userID int64, not
 		return nil
 	}
 
-	subs, err := s.store.GetPushSubscriptionsByUserID(ctx, userID)
-	if err != nil {
-		return fmt.Errorf("get subscriptions: %w", err)
-	}
-	if len(subs) == 0 {
-		return nil
-	}
-
 	payload, err := json.Marshal(map[string]string{
 		"title":      s.config.Title,
 		"body":       s.config.Body,
@@ -117,52 +112,12 @@ func (s *NotificationService) processUser(ctx context.Context, userID int64, not
 		return fmt.Errorf("marshal payload: %w", err)
 	}
 
-	for _, sub := range subs {
-		device := endpointHost(sub.Endpoint)
-		log.Printf("push notification: sending scheduled notification to user %d, device %q", userID, device)
-		pushSub := &webpush.Subscription{
-			Endpoint: sub.Endpoint,
-			Keys: webpush.Keys{
-				P256dh: sub.P256dhKey,
-				Auth:   sub.AuthKey,
-			},
-		}
-		resp, err := webpush.SendNotification(payload, pushSub, &webpush.Options{
-			VAPIDPublicKey:  s.config.VAPIDPublicKey,
-			VAPIDPrivateKey: s.config.VAPIDPrivateKey,
-			Subscriber:      normalizeVAPIDSubscriber(s.config.VAPIDSubject),
-		})
-		if err != nil {
-			log.Printf("push notification: scheduled to user %d, device %q: send error: %v", userID, device, err)
-			return fmt.Errorf("send push to endpoint: %w", err)
-		}
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if resp.StatusCode >= 400 {
-			log.Printf("push notification: scheduled to user %d, device %q: push service rejected (status %d): %s", userID, device, resp.StatusCode, string(body))
-			return fmt.Errorf("push rejected (status %d)", resp.StatusCode)
-		}
-		log.Printf("push notification: scheduled to user %d, device %q: sent successfully (status %d)", userID, device, resp.StatusCode)
+	// Subscriptions the push service reports as gone are pruned by the sender;
+	// only a genuine send failure is returned as an error (and so retried).
+	if _, err := s.sender.SendToUser(ctx, userID, strconv.FormatInt(userID, 10), payload); err != nil {
+		return err
 	}
 	return nil
-}
-
-// normalizeVAPIDSubscriber strips a leading "mailto:" prefix before passing
-// the subscriber to the webpush library. The library prepends "mailto:" to any
-// value that does not start with "https:", so passing an already-prefixed value
-// (e.g. "mailto:user@example.com") would produce "mailto:mailto:user@example.com"
-// in the JWT sub claim, which Apple's push service rejects with BadJwtToken.
-func normalizeVAPIDSubscriber(s string) string {
-	return strings.TrimPrefix(s, "mailto:")
-}
-
-// endpointHost extracts the host from a push endpoint URL for logging.
-// Falls back to the full endpoint string if parsing fails.
-func endpointHost(endpoint string) string {
-	if u, err := url.Parse(endpoint); err == nil && u.Host != "" {
-		return u.Host
-	}
-	return endpoint
 }
 
 // ComputeNextNotifyAt returns the next occurrence of (weekday=notifyDay,
