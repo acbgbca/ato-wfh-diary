@@ -1,3 +1,5 @@
+.devcontainer/devcontainer-lock.json
+
 bin/server
 data/wfh.db
 data/wfh.db-shm
