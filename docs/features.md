@@ -308,6 +308,16 @@ The **Notifications** section appears in the Settings view:
   - A message explains that installation is required
   - An **Install App** button is shown (using the browser's `beforeinstallprompt` event); falls back to a "Add to home screen" message if the prompt is not available
 
+### Subscription lifecycle
+
+A Web Push subscription belongs to a specific browser/PWA install, not to the user. Uninstalling the PWA (or the browser discarding the subscription) invalidates it without informing the server, so the app keeps both ends in sync:
+
+- **Re-registration on startup**: whenever the app starts with notification permission granted and notifications enabled, it re-registers the current subscription with the server (creating a new one if the install no longer has one). A reinstalled PWA therefore registers its new endpoint the first time it is opened.
+- **Pruning of dead subscriptions**: when a push service reports a subscription as gone (HTTP `404` or `410` — Apple returns `410 Unregistered` after the PWA is uninstalled), the subscription is deleted from `push_subscriptions`. It is not treated as a retryable failure.
+- **Independent delivery per device**: a device that fails does not stop delivery to the user's other devices. A send is a failure only if no device accepted the notification.
+
+If a test notification finds that every registered subscription is dead, they are all pruned and the user is told to turn notifications off and back on to re-register the device.
+
 ### Deep-link on notification click
 
 Notification payloads include a `week_start` date. The service worker handles `notificationclick` and opens `/?week=YYYY-MM-DD`. On load, the app checks for this query parameter and navigates directly to the specified week.
@@ -320,7 +330,7 @@ A background goroutine runs every `NOTIFICATION_SCHEDULER_INTERVAL` (default `10
 2. For each matched user, determines the target week and counts entries
 3. If the week is incomplete: sends a Web Push notification to all of the user's subscriptions
    - Success → advances `next_notify_at` by one week
-   - Failure → logs the error; `next_notify_at` is left unchanged so the attempt is retried on the next tick
+   - Failure → logs the error; `next_notify_at` is left unchanged so the attempt is retried on the next tick. A subscription reported as gone is pruned (see Subscription lifecycle) rather than counted as a failure, so a dead device never blocks the schedule.
 4. If the week is complete: advances `next_notify_at` without sending
 
 ### Configuration (environment variables)
@@ -409,6 +419,7 @@ Response:
 | `PUT` | `/api/notifications/prefs` | Updates the current user's notification preferences; recalculates `next_notify_at` |
 | `POST` | `/api/notifications/subscribe` | Saves or updates a Web Push subscription for the current user |
 | `DELETE` | `/api/notifications/subscribe` | Removes a Web Push subscription by endpoint |
+| `POST` | `/api/notifications/test` | Sends a test notification to the current user's devices; prunes any subscription the push service reports as gone |
 
 ### E2E Tests
 

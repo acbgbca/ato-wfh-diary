@@ -119,6 +119,7 @@ async function init() {
     }
 
     showView('diary');
+    refreshPushSubscription();
   } catch (e) {
     api.logClientError({
       message: e.message,
@@ -643,6 +644,24 @@ async function saveNotificationPrefs() {
     setTimeout(clearNotifStatus, 3000);
   } catch (e) {
     setNotifStatus(e.message, true);
+  }
+}
+
+// Re-registers this install's push subscription on startup when notifications
+// are enabled. Reinstalling the PWA (or the browser dropping the subscription)
+// discards the old subscription without telling the server, which keeps pushing
+// to an endpoint the push service now rejects as unregistered. Re-registering
+// on every start replaces the stale endpoint with the live one.
+async function refreshPushSubscription() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+  try {
+    const prefs = await api.getNotificationPrefs();
+    if (!prefs.enabled) return;
+    await ensurePushSubscription();
+  } catch (e) {
+    // Non-fatal — the notification settings screen surfaces any real problem.
   }
 }
 
