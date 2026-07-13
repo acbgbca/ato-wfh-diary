@@ -208,9 +208,10 @@ Tapping the week label (e.g. "12 May – 18 May ▾") opens a **bottom sheet dia
 - **Quick-jump buttons:**
   - **Last week** — navigates to the most recently completed Mon–Sun week
   - **First incomplete** — navigates to the earliest week with fewer than 7 saved entries (uses the existing `first-incomplete-week` API)
-- **Scrollable week list** showing every week from the first Monday on or after July 1 of the current FY up to the most recently completed week:
+- **Scrollable week list** showing every week of the current FY, from the week containing July 1 up to the most recently completed week:
   - Each item displays the week's date range (e.g. "7 Jul – 13 Jul 2025")
-  - A completion dot indicates status: green (●) for complete (7 entries), grey (○) for incomplete
+  - The FY's **first week is the week containing July 1**, even where that week begins in June (e.g. FY2026 starts Tue 1 Jul 2025, so its first week starts Mon 30 Jun 2025). That week's July days belong to the FY and must be filled in, and Smart Initial Load opens it, so the picker lists it too — the picker and the `first-incomplete-week` API agree on where the FY begins.
+  - A completion dot indicates status: green (●) for complete, grey (○) for incomplete. A week is complete when it has an entry for every day of the week that falls **inside the FY** — so the straddling first week needs only its July days (e.g. 6 for FY2026), matching the rule the backend applies.
   - The current week is highlighted with a distinct background
   - Tapping a week item navigates to that week and closes the dialog
 
@@ -240,6 +241,7 @@ The dialog is opened with `showModal()` and closed via the close button, backdro
 
 **Edge cases:**
 - If the current FY has just started with only one past week, the list displays correctly
+- Immediately after the FY rolls over on 1 July, the new FY may have no completed weeks at all. The list then shows "No completed weeks yet this financial year" rather than rendering empty. The quick-jump buttons remain functional.
 
 #### Smart Initial Load
 
@@ -418,3 +420,16 @@ make test-e2e
 ```
 
 E2E tests use the `e2e` build tag and are excluded from the standard `make test` run.
+
+#### Pinned clock
+
+The app's behaviour depends on the current date — which financial year is current, which weeks are in the past, which week to open on. The E2E tests assert on concrete FY2026 dates, so they only hold while "today" sits inside FY2026; left on the real system clock the whole suite would break on 1 July each year, when the Australian financial year rolls over.
+
+Both sides of the app are therefore pinned to a fixed date (`2026-03-24`) for E2E runs:
+
+- **Server:** all date-dependent code reads `internal/clock.Now()` rather than `time.Now()`. The in-process E2E server pins it directly; the Docker E2E container pins it via the `WFH_TEST_TODAY` environment variable (set in `docker-compose.test.yml`), which `main` reads at startup.
+- **Browser:** `pinBrowserClock` installs a `Date` shim before page scripts run, so `new Date()` and `Date.now()` report the same pinned date. Only the zero-argument constructor and `Date.now()` are redirected — parsing and date arithmetic behave normally.
+
+The pinned date is defined once as `e2eToday` in `backend/e2e/e2e_test.go` and must be kept in sync with `WFH_TEST_TODAY` in `docker-compose.test.yml`.
+
+`WFH_TEST_TODAY` is a **test-only** switch. It is unset in production; when it is set the server logs a loud startup warning.

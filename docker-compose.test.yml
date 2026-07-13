@@ -18,3 +18,8 @@ services:
     environment:
       - DB_PATH=/data/wfh.db
       - FORWARD_AUTH_HEADER=X-Forwarded-User
+      # Pin the server's idea of "today" so the E2E suite's FY2026 date
+      # assertions hold on any day of any year. Must match e2eToday in
+      # backend/e2e/e2e_test.go, which pins the browser's clock to the same day.
+      # Test-only — never set this in a real deployment.
+      - WFH_TEST_TODAY=2026-03-24

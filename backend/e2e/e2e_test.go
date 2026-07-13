@@ -15,6 +15,50 @@ import (
 	"github.com/go-rod/rod/lib/proto"
 )
 
+// e2eToday is the date every E2E run pretends it is. The tests assert on
+// concrete dates in FY2026, which only hold while "today" sits inside that FY —
+// left on the real clock the whole suite breaks on 1 July, when the financial
+// year rolls over. Both the server (via internal/clock) and the browser (via
+// pinBrowserClock) are pinned to this date, so the suite is reproducible on any
+// day of any year.
+//
+// It must be a date comfortably inside FY2026 and far enough past the FY start
+// that the tests have several completed weeks to work with.
+const e2eToday = "2026-03-24"
+
+// pinBrowserClock makes the page's JS clock report the given YYYY-MM-DD date on
+// every subsequent navigation. The frontend derives the current financial year
+// and the "past weeks" list from new Date(), so pinning the server alone is not
+// enough.
+//
+// The shim keeps every other Date behaviour intact: only the zero-argument
+// constructor and Date.now() are redirected, so date parsing and arithmetic in
+// the app still work normally. Calling it again re-pins the page to a different
+// date — it stashes the genuine Date on first use, so each pin wraps the real
+// one rather than the previous shim.
+func pinBrowserClock(t *testing.T, page *rod.Page, today string) {
+	t.Helper()
+	// Midday UTC, matching clock.Fix on the server, so both agree on the
+	// calendar date regardless of the browser's timezone.
+	script := fmt.Sprintf(`(() => {
+		const RealDate = window.__realDate || Date;
+		window.__realDate = RealDate;
+		const fixed = new RealDate(%q + 'T12:00:00Z').getTime();
+		function PinnedDate(...args) {
+			return args.length === 0 ? new RealDate(fixed) : new RealDate(...args);
+		}
+		PinnedDate.prototype = RealDate.prototype;
+		PinnedDate.now   = () => fixed;
+		PinnedDate.parse = RealDate.parse;
+		PinnedDate.UTC   = RealDate.UTC;
+		window.Date = PinnedDate;
+	})()`, today)
+
+	if _, err := page.EvalOnNewDocument(script); err != nil {
+		t.Fatalf("pin browser clock to %s: %v", today, err)
+	}
+}
+
 // seedWeekEntries makes a direct API call to seed 7 entries for the given weekMonday (YYYY-MM-DD).
 func seedWeekEntries(t *testing.T, serverURL, username string, userID int64, weekMonday string) {
 	t.Helper()
@@ -579,16 +623,63 @@ func TestE2E_WeekPicker_SelectWeek(t *testing.T) {
 	page.MustEval(`() => document.querySelector('#week-list .week-list-item').click()`)
 	waitFor(t, page, `() => document.getElementById('week-picker').open === false`)
 
-	// Verify the diary navigated to a different week
-	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+	// Wait for the diary to actually re-render the newly selected week. Waiting
+	// on the row count alone races: seven rows are already on the page from the
+	// week we navigated in on, so the old rows can be read before the new week
+	// loads. Wait for the rows to belong to a different week instead.
+	waitFor(t, page, `() => {
+		const rows = document.querySelectorAll('#entry-tbody tr.day-row');
+		return rows.length === 7 && rows[0].dataset.date !== '2025-08-04';
+	}`)
+
 	rows := page.MustElements("#entry-tbody tr.day-row")
 	firstDate, err := rows[0].Attribute("data-date")
 	if err != nil || firstDate == nil {
 		t.Fatal("could not read data-date from first row")
 	}
-	// First week of FY2026 starts on 2025-07-07 (first Monday on or after July 1)
-	if *firstDate != "2025-07-07" {
-		t.Errorf("after selecting first week: got %q, want 2025-07-07", *firstDate)
+	// The FY's first week is the week containing 1 Jul 2025 (a Tuesday), so it
+	// starts on Mon 30 Jun 2025 — the same week smart init treats as first.
+	if *firstDate != "2025-06-30" {
+		t.Errorf("after selecting first week: got %q, want 2025-06-30", *firstDate)
+	}
+}
+
+// TestE2E_WeekPicker_EmptyAtFYRollover verifies that in the days right after
+// the financial year rolls over on 1 July — when the new FY has no completed
+// weeks to list yet — the picker says so instead of rendering a blank sheet.
+//
+// Only the browser clock is moved here: the week list is computed client-side
+// from new Date(), and the server is only asked for completion counts, so this
+// reproduces the rollover without disturbing the pinned server clock (which the
+// Docker container fixes process-wide and cannot vary per test).
+func TestE2E_WeekPicker_EmptyAtFYRollover(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+
+	// Fri 3 Jul 2026: FY2027 has begun, but its first week (Mon 29 Jun – Sun
+	// 5 Jul) is still running, so no week of the FY has completed yet.
+	pinBrowserClock(t, page, "2026-07-03")
+
+	page.MustNavigate(serverURL)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	page.MustEval(`() => document.getElementById('week-label').click()`)
+	waitFor(t, page, `() => document.getElementById('week-picker').open === true`)
+
+	waitFor(t, page, `() => document.querySelector('#week-list .week-list-empty') !== null`)
+
+	items := page.MustEval(`() => document.querySelectorAll('#week-list .week-list-item').length`).Int()
+	if items != 0 {
+		t.Errorf("week list at FY rollover: got %d items, want 0", items)
+	}
+
+	// The quick-jump buttons must keep working even with nothing to list.
+	visible, err := page.MustElement("#jump-last-week").Visible()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !visible {
+		t.Error("last-week quick jump should remain usable when the week list is empty")
 	}
 }
 

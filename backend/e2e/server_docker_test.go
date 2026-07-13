@@ -141,6 +141,7 @@ func newPage(t *testing.T, _ string) (*rod.Browser, *rod.Page) {
 	t.Cleanup(func() { browser.MustClose() })
 
 	page := browser.MustPage("").Timeout(15 * time.Second)
+	pinBrowserClock(t, page, e2eToday)
 	cleanup, err := page.SetExtraHeaders([]string{dockerAuthHeader, t.Name()})
 	if err != nil {
 		t.Fatalf("set extra headers: %v", err)
