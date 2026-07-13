@@ -3,6 +3,7 @@ package main
 import (
 	"ato-wfh-diary/frontend"
 	"ato-wfh-diary/internal/api/handlers"
+	"ato-wfh-diary/internal/clock"
 	"ato-wfh-diary/internal/db"
 	"ato-wfh-diary/internal/service"
 	"ato-wfh-diary/migrations"
@@ -35,6 +36,13 @@ func main() {
 	notifyBody := envOr("NOTIFICATION_BODY", "Time to log your hours for this week")
 	notifySchedulerInterval := envOr("NOTIFICATION_SCHEDULER_INTERVAL", "10m")
 	vapidSubject := envOr("VAPID_SUBJECT", "mailto:admin@example.com")
+
+	if today, pinned, err := clock.FixFromEnv(); err != nil {
+		log.Fatalf("invalid %s: %v", clock.TestTodayEnv, err)
+	} else if pinned {
+		log.Printf("WARNING: %s is set — the server believes today is %s. Never set this in production.",
+			clock.TestTodayEnv, today.Format("2006-01-02"))
+	}
 
 	schedulerInterval, err := time.ParseDuration(notifySchedulerInterval)
 	if err != nil {

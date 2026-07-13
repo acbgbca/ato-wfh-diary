@@ -35,6 +35,16 @@ const financialYear = d => d.getMonth() >= 6 ? d.getFullYear() + 1 : d.getFullYe
 const currentFY    = () => financialYear(new Date());
 const defaultFY    = () => currentFY() - 1;
 
+// requiredDays returns how many days of the week beginning on monday fall inside
+// the financial year beginning on fyStart. A week straddling 1 July only needs
+// its in-FY days filled in to count as complete, which is the same rule the
+// backend applies when it looks for the first incomplete week.
+const requiredDays = (monday, fyStart) => {
+  const from   = monday < fyStart ? fyStart : monday;
+  const sunday = addDays(monday, 6);
+  return Math.round((sunday - from) / 86400000) + 1;
+};
+
 function fmtLabel(dateStr) {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-AU', {
     weekday: 'short', day: 'numeric', month: 'short',
@@ -467,9 +477,10 @@ async function openWeekPicker() {
   // Determine weeks in current FY up to the most recent fully-passed week
   const fy = currentFY();
   const fyStart = new Date(fy - 1, 6, 1); // July 1
-  const firstMonday = getMonday(fyStart);
-  // If firstMonday is before July 1, advance to the next week
-  const fyFirstMonday = firstMonday < fyStart ? addDays(firstMonday, 7) : firstMonday;
+  // The FY's first week is the one containing July 1, even where that week
+  // starts in June: its July days belong to the FY and must be filled in, and
+  // smart init will open it, so the picker has to list it too.
+  const fyFirstMonday = getMonday(fyStart);
 
   // Last week = most recently completed week (Sunday has passed)
   const today = new Date();
@@ -500,6 +511,10 @@ async function openWeekPicker() {
 
   if (fetchFailed) {
     listEl.innerHTML = '<div class="week-list-error">Could not load weeks</div>';
+  } else if (weeks.length === 0) {
+    // Between 1 July and the end of the FY's first week there is nothing to
+    // list yet. Say so — an empty sheet reads as a broken picker.
+    listEl.innerHTML = '<div class="week-list-empty">No completed weeks yet this financial year</div>';
   } else {
     const currentWeekStr = formatDate(weekStart);
 
@@ -507,7 +522,7 @@ async function openWeekPicker() {
       const ws = formatDate(w);
       const sun = formatDate(addDays(w, 6));
       const count = statusMap[ws] || 0;
-      const isComplete = count >= 7;
+      const isComplete = count >= requiredDays(w, fyStart);
       const isCurrent = ws === currentWeekStr;
       return `<button type="button" class="week-list-item${isCurrent ? ' current-week' : ''}" data-week-start="${ws}">
         <span class="completion-dot${isComplete ? ' complete' : ''}">${isComplete ? '●' : '○'}</span>

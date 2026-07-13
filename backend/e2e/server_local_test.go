@@ -9,6 +9,7 @@ import (
 
 	"ato-wfh-diary/frontend"
 	"ato-wfh-diary/internal/api/handlers"
+	"ato-wfh-diary/internal/clock"
 	"ato-wfh-diary/internal/db"
 	"ato-wfh-diary/migrations"
 
@@ -29,6 +30,7 @@ func testUsername(_ *testing.T, fallback string) string { return fallback }
 // and the embedded frontend. Returns the server's base URL.
 func newE2EServer(t *testing.T) string {
 	t.Helper()
+	pinServerClock(t)
 	database, err := db.Open(":memory:", migrations.FS)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
@@ -42,6 +44,19 @@ func newE2EServer(t *testing.T) string {
 		database.Close()
 	})
 	return srv.URL
+}
+
+// pinServerClock makes the in-process server believe today is e2eToday. The
+// Docker harness does the same thing through the WFH_TEST_TODAY environment
+// variable, which the container's entrypoint reads at startup.
+func pinServerClock(t *testing.T) {
+	t.Helper()
+	today, err := time.Parse("2006-01-02", e2eToday)
+	if err != nil {
+		t.Fatalf("parse e2eToday: %v", err)
+	}
+	clock.Fix(today)
+	t.Cleanup(func() { clock.Now = time.Now })
 }
 
 // newPage launches a headless browser page pre-authenticated as username.
@@ -62,6 +77,7 @@ func newPage(t *testing.T, username string) (*rod.Browser, *rod.Page) {
 	t.Cleanup(func() { browser.MustClose() })
 
 	page := browser.MustPage("").Timeout(15 * time.Second)
+	pinBrowserClock(t, page, e2eToday)
 	cleanup, err := page.SetExtraHeaders([]string{localAuthHeader, username})
 	if err != nil {
 		t.Fatalf("set extra headers: %v", err)

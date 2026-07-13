@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"ato-wfh-diary/internal/clock"
 	"ato-wfh-diary/internal/model"
 	"encoding/json"
 	"fmt"
@@ -32,7 +33,7 @@ func (h *Handler) GetFirstIncompleteWeek(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	today := time.Now().UTC()
+	today := clock.Now().UTC()
 
 	financialYear, hasFY := queryInt(r, "financial_year")
 	if !hasFY {
@@ -98,7 +99,7 @@ func (h *Handler) GetWeekCompletionStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	today := time.Now().UTC()
+	today := clock.Now().UTC()
 
 	financialYear, hasFY := queryInt(r, "financial_year")
 	if !hasFY {

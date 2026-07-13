@@ -1,8 +1,8 @@
 package service
 
 import (
+	"ato-wfh-diary/internal/clock"
 	"ato-wfh-diary/internal/model"
-	"time"
 )
 
 // ReportSummary is the top-level result of a financial year WFH report.
@@ -33,12 +33,12 @@ func BuildReport(userID int64, financialYear int, entries []model.WorkDayEntry, 
 
 // CurrentFinancialYear returns the financial year that contains today's date.
 func CurrentFinancialYear() int {
-	return model.FinancialYear(time.Now())
+	return model.FinancialYear(clock.Now())
 }
 
 // LastFinancialYear returns the most recently completed financial year.
 func LastFinancialYear() int {
-	now := time.Now()
+	now := clock.Now()
 	fy := model.FinancialYear(now)
 	// If we're still in the first day of the new FY (1 Jul) the current FY has
 	// barely started — either way, "last FY" is always current FY minus one.
