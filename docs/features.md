@@ -161,6 +161,7 @@ The application is installable as a PWA on supported browsers and devices:
 
 - `manifest.json` declares app name, display mode (`standalone`), theme colour, and icon
 - `sw.js` is a minimal service worker that caches the app shell (HTML, CSS, JS, manifest, icon) for fast subsequent loads; all `/api/` requests always go to the network
+- `sw.js` also handles the push events: `push` (show the notification), `notificationclick` (deep-link into the week), and `pushsubscriptionchange` (re-subscribe — see [Subscription lifecycle](#subscription-lifecycle)). It carries its own copy of `urlBase64ToUint8Array` because a service worker cannot import from `js/app.js`
 - An SVG app icon is provided at `icons/icon.svg`
 - On iOS, the `apple-touch-icon` link enables "Add to Home Screen" support
 - The browser's native install prompt is relied upon (no custom install UI)
@@ -313,6 +314,7 @@ The **Notifications** section appears in the Settings view:
 A Web Push subscription belongs to a specific browser/PWA install, not to the user. Uninstalling the PWA (or the browser discarding the subscription) invalidates it without informing the server, so the app keeps both ends in sync:
 
 - **Re-registration on startup**: whenever the app starts with notification permission granted and notifications enabled, it re-registers the current subscription with the server (creating a new one if the install no longer has one). A reinstalled PWA therefore registers its new endpoint the first time it is opened.
+- **Re-subscription on `pushsubscriptionchange`**: the browser fires this event at the service worker when it invalidates a subscription while the install is still in place (a key rotation, or a long stretch of inactivity). `sw.js` handles it by fetching the VAPID key, subscribing again, `POST`ing the new subscription, and `DELETE`ing `event.oldSubscription`'s endpoint if the browser supplied one. This complements the startup re-registration rather than replacing it — the event is not fired when the PWA is uninstalled, because the service worker goes with it, and Safari's support for it is incomplete. A failure here costs at most one missed notification: the next app start re-registers, and the server prunes the dead endpoint on the next failed send.
 - **Pruning of dead subscriptions**: when a push service reports a subscription as gone (HTTP `404` or `410` — Apple returns `410 Unregistered` after the PWA is uninstalled), the subscription is deleted from `push_subscriptions`. It is not treated as a retryable failure.
 - **Independent delivery per device**: a device that fails does not stop delivery to the user's other devices. A send is a failure only if no device accepted the notification.
 

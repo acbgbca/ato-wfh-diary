@@ -8,13 +8,13 @@ import (
 
 // clientErrorReport is the payload sent by the browser's global error handler.
 type clientErrorReport struct {
-	Message     string `json:"message"`
-	Stack       string `json:"stack"`
-	URL         string `json:"url"`
-	Platform    string `json:"platform"`
-	DisplayMode string `json:"displayMode"`
-	ScreenWidth  int   `json:"screenWidth"`
-	ScreenHeight int   `json:"screenHeight"`
+	Message      string `json:"message"`
+	Stack        string `json:"stack"`
+	URL          string `json:"url"`
+	Platform     string `json:"platform"`
+	DisplayMode  string `json:"displayMode"`
+	ScreenWidth  int    `json:"screenWidth"`
+	ScreenHeight int    `json:"screenHeight"`
 }
 
 // PostClientError logs a client-side error report received from the browser.
