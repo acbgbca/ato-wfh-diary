@@ -418,6 +418,10 @@ async function saveWeek() {
 
     // Stay on the saved week — the user navigates weeks themselves.
 
+    // The week now holds exactly what we just posted, so keep the tracked count
+    // in sync; otherwise clearStatus() would restore a stale "not submitted".
+    weekEntryCount = entries.length;
+
     // Scroll to top so the user sees the week heading and the Saved confirmation.
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -761,10 +765,18 @@ function clearProfileStatus() {
 }
 
 // ── Report ─────────────────────────────────────────────────────────────────
+// reportLoadSeq tags each in-flight report fetch. Switching financial year
+// while a load is still running leaves two requests racing, and responses can
+// arrive out of order — without this guard a slow response for the previous FY
+// repaints the table over the FY the user actually asked for.
+let reportLoadSeq = 0;
+
 async function loadReport() {
+  const seq = ++reportLoadSeq;
   try {
-    currentReport = await api.getReport(selectedUserId, reportFY);
-    const report = currentReport;
+    const report = await api.getReport(selectedUserId, reportFY);
+    if (seq !== reportLoadSeq) return; // superseded by a newer load
+    currentReport = report;
 
     document.getElementById('report-summary').innerHTML =
       `<p><strong>${escapeHTML(report.display_name)}</strong> &nbsp;&middot;&nbsp; ` +
@@ -776,6 +788,7 @@ async function loadReport() {
     document.getElementById('report-total').innerHTML =
       `<strong>${(+report.total_hours).toFixed(2)}</strong>`;
   } catch (e) {
+    if (seq !== reportLoadSeq) return; // superseded by a newer load
     document.getElementById('report-summary').innerHTML =
       `<p class="error">${escapeHTML(e.message)}</p>`;
   }
@@ -803,6 +816,9 @@ function renderReportWeeks(report) {
   today.setHours(0, 0, 0, 0);
 
   const tbody = document.getElementById('report-tbody');
+  // Record which FY these rows belong to, so a caller can tell a finished
+  // switch from rows still left over from the previously selected year.
+  tbody.dataset.fy = fy;
   tbody.innerHTML = fyWeeks(fy).map(mon => {
     const ws = formatDate(mon);
     const week = byWeek[ws] ?? { count: 0, hours: 0 };

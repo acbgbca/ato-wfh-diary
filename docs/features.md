@@ -199,6 +199,7 @@ The fetch handler chooses a strategy per request:
   - 🔴 **"Week not submitted"** — fewer than 7 entries exist for the displayed week
   - 🟢 **"Week submitted"** — all 7 entries are present for the displayed week
   - The indicator is updated on every `loadWeek()` call using the entry count returned by the existing `getEntries` API — no additional request is needed
+  - On save, the indicator temporarily shows "✓ Saved"; once that confirmation clears (after 3 seconds) it reflects the **newly saved** week. Because Save Week always submits all 7 rows, a saved week is always shown as submitted — no re-fetch is required
 
 #### Week Picker
 
@@ -295,6 +296,8 @@ Status is derived as:
 Clicking (or pressing Enter/Space on) a week row opens that week in the **Diary** view for editing. Rows are focusable via the keyboard.
 
 All of this is computed client-side from the `all_entries` array already returned by `GET /api/users/{id}/report` — no additional request is made.
+
+Changing the financial year while a report is still loading leaves two requests in flight, and they can complete out of order. Each load is tagged with a sequence number and a response is discarded if a newer load has started since, so a slow response for the previous year cannot repaint over the year the user selected. The rendered year is exposed as `data-fy` on `#report-tbody`.
 
 ## Push Notifications
 
