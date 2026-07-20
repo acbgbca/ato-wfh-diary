@@ -241,7 +241,12 @@ func openReportForFY(t *testing.T, page *rod.Page, fy int) {
 	page.MustElement("#nav-report").MustClick()
 	waitFor(t, page, `() => !document.getElementById('view-report').hidden`)
 	selectReportFY(t, page, fy)
-	waitFor(t, page, `() => document.querySelectorAll('#report-tbody tr.week-row').length > 0`)
+	// Wait for the requested FY's rows specifically. Navigating to the report
+	// kicks off a load for the default FY, so "any rows present" can be
+	// satisfied by that year's table while the switch is still in flight.
+	waitFor(t, page, fmt.Sprintf(
+		`() => document.getElementById('report-tbody').dataset.fy === '%d'
+			&& document.querySelectorAll('#report-tbody tr.week-row').length > 0`, fy))
 }
 
 // TestE2E_ReportListsAllWeeksOfFY verifies the report replaces the per-entry
@@ -302,6 +307,49 @@ func TestE2E_ReportListsAllWeeksOfFY(t *testing.T) {
 	// A week that has not started yet is in the future.
 	if got := statusOf("2026-03-30"); got != "Future" {
 		t.Errorf("status of future week: got %q, want Future", got)
+	}
+}
+
+// TestE2E_ReportStaleLoadDoesNotOverwrite verifies that switching financial
+// year while the previous year's report is still loading leaves the requested
+// year on screen. Opening the report starts a load for the default FY, so a
+// slow response for that year must not repaint over the FY the user picked.
+func TestE2E_ReportStaleLoadDoesNotOverwrite(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	// Delay only the first report request (the default FY) by 1.5s, so it is
+	// guaranteed to land after the FY2026 request that follows it.
+	page.MustEval(`() => {
+		const realFetch = window.fetch;
+		let delayed = false;
+		window.fetch = (url, ...rest) => {
+			if (typeof url === 'string' && url.includes('/report?financial_year=') && !delayed) {
+				delayed = true;
+				return new Promise(resolve =>
+					setTimeout(() => resolve(realFetch(url, ...rest)), 1500));
+			}
+			return realFetch(url, ...rest);
+		};
+	}`)
+
+	page.MustElement("#nav-report").MustClick()
+	waitFor(t, page, `() => !document.getElementById('view-report').hidden`)
+	selectReportFY(t, page, 2026)
+
+	// Wait past the delayed response so any overwrite would have happened.
+	waitFor(t, page, `() => document.getElementById('report-tbody').dataset.fy === '2026'`)
+	time.Sleep(2 * time.Second)
+
+	fy := page.MustEval(`() => document.getElementById('report-tbody').dataset.fy`).Str()
+	if fy != "2026" {
+		t.Errorf("report table FY after stale load: got %q, want 2026", fy)
+	}
+	first := page.MustEval(`() => document.querySelector('#report-tbody tr.week-row').dataset.weekStart`).Str()
+	if first != "2025-06-30" {
+		t.Errorf("first week row after stale load: got %q, want 2025-06-30", first)
 	}
 }
 

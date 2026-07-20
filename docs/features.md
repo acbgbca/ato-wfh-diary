@@ -297,6 +297,8 @@ Clicking (or pressing Enter/Space on) a week row opens that week in the **Diary*
 
 All of this is computed client-side from the `all_entries` array already returned by `GET /api/users/{id}/report` — no additional request is made.
 
+Changing the financial year while a report is still loading leaves two requests in flight, and they can complete out of order. Each load is tagged with a sequence number and a response is discarded if a newer load has started since, so a slow response for the previous year cannot repaint over the year the user selected. The rendered year is exposed as `data-fy` on `#report-tbody`.
+
 ## Push Notifications
 
 Users who have installed the app as a PWA can opt in to weekly reminders to fill in their hours.
