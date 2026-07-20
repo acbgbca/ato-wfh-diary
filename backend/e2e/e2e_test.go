@@ -165,7 +165,7 @@ func TestE2E_SaveAndReloadEntry(t *testing.T) {
 	firstRow.MustElement(".day-type-select").MustSelect("Work From Home")
 	firstRow.MustElement(".hours-input").MustInput("7.5")
 
-	// Save (current week, so no auto-advance).
+	// Save.
 	page.MustElement("#save-entries").MustClick()
 	waitFor(t, page, `() => document.getElementById('save-status').textContent === 'Saved'`)
 
@@ -664,18 +664,19 @@ func TestE2E_SmartInit_FallsBackToCurrentWeek(t *testing.T) {
 	}
 }
 
-// TestE2E_AutoAdvance_AfterSavingPastWeek verifies that after saving a past
-// week the app automatically advances to the next incomplete week.
-func TestE2E_AutoAdvance_AfterSavingPastWeek(t *testing.T) {
+// TestE2E_SavePastWeek_StaysOnWeek verifies that saving a past week leaves the
+// user on that same week rather than navigating elsewhere (issue #75).
+func TestE2E_SavePastWeek_StaysOnWeek(t *testing.T) {
 	serverURL := newE2EServer(t)
 	_, page := newPage(t, "alice")
 
 	u := testUsername(t, "alice")
 	userID := getUserID(t, serverURL, u)
-	// Seed 2025-07-14 as complete; leave 2025-07-07 and 2025-07-21 empty.
+	// Seed 2025-07-14 as complete; leave 2025-07-07 and 2025-07-21 empty, so
+	// the old auto-advance behaviour would have jumped to 2025-07-21.
 	seedWeekEntries(t, serverURL, u, userID, "2025-07-14")
 
-	// Navigate directly to the first incomplete week (2025-07-07)
+	// Navigate directly to a past week (2025-07-07)
 	page.MustNavigate(serverURL + "?week=2025-07-07")
 	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
 
@@ -688,17 +689,21 @@ func TestE2E_AutoAdvance_AfterSavingPastWeek(t *testing.T) {
 	page.MustElement("#save-entries").MustClick()
 	waitFor(t, page, `() => document.getElementById('save-status').textContent === 'Saved'`)
 
-	// After saving a past week, app should advance to the next incomplete week.
-	// 2025-07-14 is complete, so next incomplete is 2025-07-21.
+	// Give any (unwanted) navigation a chance to happen before asserting.
 	time.Sleep(800 * time.Millisecond)
 
 	rows := page.MustElements("#entry-tbody tr.day-row")
 	firstDate, err := rows[0].Attribute("data-date")
 	if err != nil || firstDate == nil {
-		t.Fatal("could not read data-date from first row after auto-advance")
+		t.Fatal("could not read data-date from first row after save")
 	}
-	if *firstDate != "2025-07-21" {
-		t.Errorf("auto-advance: first row date got %q, want 2025-07-21", *firstDate)
+	if *firstDate != "2025-07-07" {
+		t.Errorf("save navigated away: first row date got %q, want 2025-07-07", *firstDate)
+	}
+
+	status := page.MustElement("#week-status").MustText()
+	if !strings.Contains(status, "Saved") {
+		t.Errorf("week-status got %q, want it to contain \"Saved\"", status)
 	}
 }
 

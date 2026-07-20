@@ -413,25 +413,10 @@ async function saveWeek() {
     return entry;
   });
 
-  const savedWeekStart = weekStart;
-
   try {
     await api.saveEntries(selectedUserId, entries);
 
-    // Auto-advance: if the saved week is before the current week, navigate
-    // to the next incomplete week (or fall back to the current week).
-    const currentMonday = getMonday(new Date());
-    if (savedWeekStart < currentMonday) {
-      const nextFromDate = formatDate(addDays(savedWeekStart, 7));
-      const fy = currentFY();
-      const data = await api.getFirstIncompleteWeek(selectedUserId, fy, nextFromDate).catch(() => null);
-      if (data?.week_start) {
-        weekStart = getMonday(new Date(data.week_start + 'T00:00:00'));
-      } else {
-        weekStart = currentMonday;
-      }
-      await loadWeek({ keepStatus: true });
-    }
+    // Stay on the saved week — the user navigates weeks themselves.
 
     // Scroll to top so the user sees the week heading and the Saved confirmation.
     window.scrollTo({ top: 0, behavior: 'smooth' });
