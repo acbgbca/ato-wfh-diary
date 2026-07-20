@@ -749,17 +749,24 @@ func TestE2E_WeekPicker_LastWeekButton(t *testing.T) {
 	page.MustEval(`() => document.getElementById('jump-last-week').click()`)
 	waitFor(t, page, `() => document.getElementById('week-picker').open === false`)
 
-	// The diary should now show the previous week (relative to today)
-	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+	// Wait for the diary to actually re-render the previous week. Waiting on the
+	// row count alone races: seven rows are already on the page from the week we
+	// navigated in on, so the old rows can be read before the new week loads.
+	// Wait for the rows to belong to a different week instead.
+	waitFor(t, page, `() => {
+		const rows = document.querySelectorAll('#entry-tbody tr.day-row');
+		return rows.length === 7 && rows[0].dataset.date !== '2025-08-04';
+	}`)
 
-	// Just verify it navigated away from 2025-08-04
+	// The clock is pinned to e2eToday (Tue 24 Mar 2026), so "last week" is the
+	// week starting Mon 16 Mar 2026.
 	rows := page.MustElements("#entry-tbody tr.day-row")
 	firstDate, err := rows[0].Attribute("data-date")
 	if err != nil || firstDate == nil {
 		t.Fatal("could not read data-date from first row")
 	}
-	if *firstDate == "2025-08-04" {
-		t.Error("last week button should navigate away from current week")
+	if *firstDate != "2026-03-16" {
+		t.Errorf("after last week button: got %q, want 2026-03-16", *firstDate)
 	}
 }
 
