@@ -249,10 +249,13 @@ func openReportForFY(t *testing.T, page *rod.Page, fy int) {
 // straddles 1 July — and reports each week's submission status and WFH hours.
 func TestE2E_ReportListsAllWeeksOfFY(t *testing.T) {
 	serverURL := newE2EServer(t)
-	userID := getUserID(t, serverURL, "alice")
+	// The Docker suite shares one database and isolates tests by giving each its
+	// own user, so seeding has to target the same user the page authenticates as.
+	u := testUsername(t, "alice")
+	userID := getUserID(t, serverURL, u)
 
 	// A fully submitted WFH week in the past of FY2026 (today is 2026-03-24).
-	seedWeekEntriesTyped(t, serverURL, "alice", userID, "2026-03-16", "wfh", 8)
+	seedWeekEntriesTyped(t, serverURL, u, userID, "2026-03-16", "wfh", 8)
 
 	_, page := newPage(t, "alice")
 	page.MustNavigate(serverURL)
