@@ -101,14 +101,17 @@
         <select id="fy-select"></select>
       </div>
       <div id="report-summary"></div>
+      <div class="report-actions">
+        <button id="export-csv" class="secondary">Export CSV</button>
+        <button id="print-pdf" class="secondary">Print PDF</button>
+      </div>
       <div class="table-wrapper">
         <table id="report-table">
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Type</th>
-              <th>Hours</th>
-              <th>Notes</th>
+              <th>Week starting</th>
+              <th>Status</th>
+              <th>WFH Hours</th>
             </tr>
           </thead>
           <tbody id="report-tbody"></tbody>
@@ -116,14 +119,9 @@
             <tr>
               <td colspan="2"><strong>Total WFH Hours</strong></td>
               <td id="report-total"><strong>&#8212;</strong></td>
-              <td></td>
             </tr>
           </tfoot>
         </table>
-      </div>
-      <div class="report-actions">
-        <button id="export-csv" class="secondary">Export CSV</button>
-        <button id="print-pdf" class="secondary">Print PDF</button>
       </div>
     </section>
 

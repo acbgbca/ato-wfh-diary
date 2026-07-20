@@ -271,9 +271,30 @@ After successfully saving a week that is before the current week, the app automa
 
 - **Financial year selector** defaults to the most recently completed FY; up to 6 years are available
 - A **summary block** shows the selected user's name, financial year range, and total WFH hours
-- A **detail table** lists every WFH entry (date, type, hours, notes)
 - **Export CSV** downloads the report as a CSV file via the backend export endpoint
 - **Print PDF** opens a print dialog with a formatted A4 calendar view of the full financial year (see Print PDF section above)
+- The Export CSV / Print PDF buttons sit directly below the summary block, above the week table
+- A **week table** lists every week of the financial year (see below)
+
+##### Week table
+
+A per-entry list of every WFH day was too long to scan and duplicated the CSV/PDF exports. The table instead shows one row per week, so the useful question — which weeks are still to be filled in — is answerable at a glance.
+
+| Column | Description |
+|---|---|
+| **Week starting** | The Monday of the week. The first row is the week **containing 1 July**, so a FY starting mid-week lists a Monday in June; the last row is the week containing 30 June. |
+| **Status** | `Submitted`, `Unsubmitted`, or `Future` |
+| **WFH Hours** | Total `wfh` + `part_wfh` hours for the week; shown only for submitted weeks (`—` otherwise) |
+
+Status is derived as:
+
+- **Submitted** — the week has an entry for every one of its days that falls **inside the FY**. The weeks straddling 1 July and 30 June therefore need only their in-FY days, matching the rule used by the week picker and the `first-incomplete-week` API.
+- **Future** — not submitted, and the week's Monday is after today. The current week is never `Future`.
+- **Unsubmitted** — everything else.
+
+Clicking (or pressing Enter/Space on) a week row opens that week in the **Diary** view for editing. Rows are focusable via the keyboard.
+
+All of this is computed client-side from the `all_entries` array already returned by `GET /api/users/{id}/report` — no additional request is made.
 
 ## Push Notifications
 
