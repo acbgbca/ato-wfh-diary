@@ -199,6 +199,7 @@ The fetch handler chooses a strategy per request:
   - 🔴 **"Week not submitted"** — fewer than 7 entries exist for the displayed week
   - 🟢 **"Week submitted"** — all 7 entries are present for the displayed week
   - The indicator is updated on every `loadWeek()` call using the entry count returned by the existing `getEntries` API — no additional request is needed
+  - On save, the indicator temporarily shows "✓ Saved"; once that confirmation clears (after 3 seconds) it reflects the **newly saved** week. Because Save Week always submits all 7 rows, a saved week is always shown as submitted — no re-fetch is required
 
 #### Week Picker
 

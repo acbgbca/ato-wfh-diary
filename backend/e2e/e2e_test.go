@@ -707,6 +707,35 @@ func TestE2E_SavePastWeek_StaysOnWeek(t *testing.T) {
 	}
 }
 
+// TestE2E_SaveWeek_StatusBecomesSubmitted verifies that after saving a full
+// week, once the transient "Saved" message clears the week-status indicator
+// reflects the newly submitted week rather than reverting to "not submitted"
+// (issue #77).
+func TestE2E_SaveWeek_StatusBecomesSubmitted(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+
+	// Start on an empty week, so the indicator begins as "not submitted".
+	page.MustNavigate(serverURL + "?week=2025-07-07")
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	page.MustEval(`() => {
+		document.querySelectorAll('#entry-tbody tr.day-row').forEach(row => {
+			row.querySelector('.day-type-select').value = 'office';
+		});
+	}`)
+	page.MustElement("#save-entries").MustClick()
+	waitFor(t, page, `() => document.getElementById('save-status').textContent === 'Saved'`)
+
+	// The "Saved" confirmation clears after 3s; wait for it to go away.
+	waitFor(t, page, `() => document.getElementById('save-status').textContent === ''`)
+
+	status := page.MustElement("#week-status").MustText()
+	if strings.Contains(status, "not submitted") {
+		t.Errorf("week-status after save got %q, want it to show the week as submitted", status)
+	}
+}
+
 // TestE2E_WeekPicker_OpensAndCloses verifies that tapping the week label
 // opens the week picker bottom sheet and that it can be closed.
 func TestE2E_WeekPicker_OpensAndCloses(t *testing.T) {

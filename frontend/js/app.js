@@ -418,6 +418,10 @@ async function saveWeek() {
 
     // Stay on the saved week — the user navigates weeks themselves.
 
+    // The week now holds exactly what we just posted, so keep the tracked count
+    // in sync; otherwise clearStatus() would restore a stale "not submitted".
+    weekEntryCount = entries.length;
+
     // Scroll to top so the user sees the week heading and the Saved confirmation.
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
