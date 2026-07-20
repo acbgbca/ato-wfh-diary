@@ -142,7 +142,26 @@
 
 #report-summary p { margin: 0; }
 
-#export-csv { width: auto; margin-top: 1rem; }
+.report-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.report-actions button { width: auto; margin: 0; }
+
+/* Week rows in the report link through to the diary, so make them feel
+   clickable and keep the keyboard focus ring visible. */
+.week-row { cursor: pointer; }
+
+.week-row:hover,
+.week-row:focus-visible {
+  background: var(--pico-secondary-background, #eee);
+}
+
+.week-status.submitted   { color: var(--pico-color-green-550,  #2e7d32); }
+.week-status.unsubmitted { color: var(--pico-color-red-550,    #c62828); }
+.week-status.future      { color: var(--pico-muted-color,      #777);    }
 
 .empty-msg {
   text-align: center;

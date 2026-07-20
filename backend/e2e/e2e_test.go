@@ -59,8 +59,14 @@ func pinBrowserClock(t *testing.T, page *rod.Page, today string) {
 	}
 }
 
-// seedWeekEntries makes a direct API call to seed 7 entries for the given weekMonday (YYYY-MM-DD).
+// seedWeekEntries makes a direct API call to seed 7 office entries for the given weekMonday (YYYY-MM-DD).
 func seedWeekEntries(t *testing.T, serverURL, username string, userID int64, weekMonday string) {
+	t.Helper()
+	seedWeekEntriesTyped(t, serverURL, username, userID, weekMonday, "office", 0)
+}
+
+// seedWeekEntriesTyped seeds all 7 days of weekMonday with the given day type and hours.
+func seedWeekEntriesTyped(t *testing.T, serverURL, username string, userID int64, weekMonday, dayType string, hours float64) {
 	t.Helper()
 	// Parse weekMonday
 	base, err := time.Parse("2006-01-02", weekMonday)
@@ -71,8 +77,8 @@ func seedWeekEntries(t *testing.T, serverURL, username string, userID int64, wee
 	for i := 0; i < 7; i++ {
 		entries[i] = map[string]any{
 			"entry_date": base.AddDate(0, 0, i).Format("2006-01-02"),
-			"day_type":   "office",
-			"hours":      0,
+			"day_type":   dayType,
+			"hours":      hours,
 		}
 	}
 	body, _ := json.Marshal(entries)
@@ -215,6 +221,122 @@ func TestE2E_ReportShowsTotals(t *testing.T) {
 	total := page.MustElement("#report-total").MustText()
 	if total == "—" || total == "" {
 		t.Errorf("report total not updated, got %q", total)
+	}
+}
+
+// selectReportFY switches the report's financial year selector and triggers a reload.
+func selectReportFY(t *testing.T, page *rod.Page, fy int) {
+	t.Helper()
+	page.MustEval(fmt.Sprintf(`() => {
+		const s = document.getElementById('fy-select');
+		s.value = '%d';
+		s.dispatchEvent(new Event('change'));
+	}`, fy))
+}
+
+// openReportForFY navigates to the report view for the given financial year and
+// waits for the week table to render.
+func openReportForFY(t *testing.T, page *rod.Page, fy int) {
+	t.Helper()
+	page.MustElement("#nav-report").MustClick()
+	waitFor(t, page, `() => !document.getElementById('view-report').hidden`)
+	selectReportFY(t, page, fy)
+	waitFor(t, page, `() => document.querySelectorAll('#report-tbody tr.week-row').length > 0`)
+}
+
+// TestE2E_ReportListsAllWeeksOfFY verifies the report replaces the per-entry
+// list with one row per week of the financial year — including the week that
+// straddles 1 July — and reports each week's submission status and WFH hours.
+func TestE2E_ReportListsAllWeeksOfFY(t *testing.T) {
+	serverURL := newE2EServer(t)
+	userID := getUserID(t, serverURL, "alice")
+
+	// A fully submitted WFH week in the past of FY2026 (today is 2026-03-24).
+	seedWeekEntriesTyped(t, serverURL, "alice", userID, "2026-03-16", "wfh", 8)
+
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	openReportForFY(t, page, 2026)
+
+	// FY2026 starts Wed 1 Jul 2025, so the first listed week is Mon 30 Jun 2025.
+	first := page.MustEval(`() => document.querySelector('#report-tbody tr.week-row').dataset.weekStart`).Str()
+	if first != "2025-06-30" {
+		t.Errorf("first week row: got %q, want 2025-06-30", first)
+	}
+
+	// The FY ends Tue 30 Jun 2026, so the last listed week is Mon 29 Jun 2026.
+	last := page.MustEval(`() => [...document.querySelectorAll('#report-tbody tr.week-row')].at(-1).dataset.weekStart`).Str()
+	if last != "2026-06-29" {
+		t.Errorf("last week row: got %q, want 2026-06-29", last)
+	}
+
+	statusOf := func(week string) string {
+		return page.MustEval(fmt.Sprintf(
+			`() => document.querySelector('#report-tbody tr[data-week-start="%s"] .week-status').textContent.trim()`, week)).Str()
+	}
+	hoursOf := func(week string) string {
+		return page.MustEval(fmt.Sprintf(
+			`() => document.querySelector('#report-tbody tr[data-week-start="%s"] .week-hours').textContent.trim()`, week)).Str()
+	}
+
+	if got := statusOf("2026-03-16"); got != "Submitted" {
+		t.Errorf("status of seeded week: got %q, want Submitted", got)
+	}
+	if got := hoursOf("2026-03-16"); got != "56.00" {
+		t.Errorf("hours of seeded week: got %q, want 56.00", got)
+	}
+
+	// A past week with no entries is unsubmitted and shows no hours.
+	if got := statusOf("2026-03-02"); got != "Unsubmitted" {
+		t.Errorf("status of empty past week: got %q, want Unsubmitted", got)
+	}
+	if got := hoursOf("2026-03-02"); got == "56.00" {
+		t.Errorf("empty past week should not report hours, got %q", got)
+	}
+
+	// A week that has not started yet is in the future.
+	if got := statusOf("2026-03-30"); got != "Future" {
+		t.Errorf("status of future week: got %q, want Future", got)
+	}
+}
+
+// TestE2E_ReportWeekOpensInDiary verifies clicking a week in the report opens
+// that week in the diary view for editing.
+func TestE2E_ReportWeekOpensInDiary(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	openReportForFY(t, page, 2026)
+
+	page.MustElement(`#report-tbody tr[data-week-start="2026-03-16"]`).MustClick()
+
+	waitFor(t, page, `() => !document.getElementById('view-diary').hidden`)
+	waitFor(t, page, `() => document.querySelector('#entry-tbody tr.day-row')?.dataset.date === '2026-03-16'`)
+}
+
+// TestE2E_ReportActionsAboveTable verifies the export/print buttons sit above
+// the week table rather than below it.
+func TestE2E_ReportActionsAboveTable(t *testing.T) {
+	serverURL := newE2EServer(t)
+	_, page := newPage(t, "alice")
+	page.MustNavigate(serverURL)
+	waitFor(t, page, `() => document.querySelectorAll('#entry-tbody tr.day-row').length === 7`)
+
+	page.MustElement("#nav-report").MustClick()
+	waitFor(t, page, `() => !document.getElementById('view-report').hidden`)
+
+	// DOCUMENT_POSITION_FOLLOWING (4) means the table comes after the actions.
+	before := page.MustEval(`() => {
+		const actions = document.querySelector('.report-actions');
+		const table = document.getElementById('report-table');
+		return !!(actions.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING);
+	}`).Bool()
+	if !before {
+		t.Error("report actions should appear above the week table")
 	}
 }
 

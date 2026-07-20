@@ -38,21 +38,34 @@ const defaultFY    = () => currentFY() - 1;
 // requiredDays returns how many days of the week beginning on monday fall inside
 // the financial year beginning on fyStart. A week straddling 1 July only needs
 // its in-FY days filled in to count as complete, which is the same rule the
-// backend applies when it looks for the first incomplete week.
-const requiredDays = (monday, fyStart) => {
+// backend applies when it looks for the first incomplete week. fyEnd (30 June)
+// clamps the other end for the week straddling the close of the FY; it is
+// optional because the week picker only ever lists weeks in the current FY.
+const requiredDays = (monday, fyStart, fyEnd = null) => {
   const from   = monday < fyStart ? fyStart : monday;
   const sunday = addDays(monday, 6);
-  return Math.round((sunday - from) / 86400000) + 1;
+  const to     = fyEnd && sunday > fyEnd ? fyEnd : sunday;
+  return Math.round((to - from) / 86400000) + 1;
 };
+
+// fyBounds returns the first and last day of the given financial year.
+const fyBounds = fy => ({ fyStart: new Date(fy - 1, 6, 1), fyEnd: new Date(fy, 5, 30) });
+
+// fyWeeks returns the Monday of every week that contains at least one day of
+// the financial year — including the weeks straddling 1 July and 30 June.
+function fyWeeks(fy) {
+  const { fyStart, fyEnd } = fyBounds(fy);
+  const weeks = [];
+  for (let mon = getMonday(fyStart); mon <= fyEnd; mon = addDays(mon, 7)) {
+    weeks.push(new Date(mon));
+  }
+  return weeks;
+}
 
 function fmtLabel(dateStr) {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-AU', {
     weekday: 'short', day: 'numeric', month: 'short',
   });
-}
-
-function dayTypeLabel(t) {
-  return DAY_TYPES.find(d => d.value === t)?.label ?? t;
 }
 
 function escapeHTML(s) {
@@ -773,16 +786,7 @@ async function loadReport() {
       `FY${reportFY} (${reportFY - 1}&#8211;${reportFY}) &nbsp;&middot;&nbsp; ` +
       `Total WFH: <strong>${(+report.total_hours).toFixed(2)} hours</strong></p>`;
 
-    const rows = report.entries ?? [];
-    document.getElementById('report-tbody').innerHTML = rows.length === 0
-      ? '<tr><td colspan="4" class="empty-msg">No WFH entries for this financial year.</td></tr>'
-      : rows.map(e => `
-          <tr>
-            <td>${e.entry_date}</td>
-            <td>${dayTypeLabel(e.day_type)}</td>
-            <td>${(+e.hours).toFixed(2)}</td>
-            <td>${escapeHTML(e.notes ?? '')}</td>
-          </tr>`).join('');
+    renderReportWeeks(report);
 
     document.getElementById('report-total').innerHTML =
       `<strong>${(+report.total_hours).toFixed(2)}</strong>`;
@@ -790,6 +794,63 @@ async function loadReport() {
     document.getElementById('report-summary').innerHTML =
       `<p class="error">${escapeHTML(e.message)}</p>`;
   }
+}
+
+// renderReportWeeks fills the report table with one row per week of the
+// financial year. A per-entry list was too long to be useful — what matters
+// when preparing a return is which weeks are still missing, so each row shows
+// the week's submission status and its WFH total, and clicking it opens that
+// week in the diary for editing.
+function renderReportWeeks(report) {
+  const fy = report.financial_year ?? reportFY;
+  const { fyStart, fyEnd } = fyBounds(fy);
+
+  // Bucket the FY's entries by the Monday of the week they fall in.
+  const byWeek = {};
+  (report.all_entries ?? []).forEach(e => {
+    const key = formatDate(getMonday(new Date(e.entry_date + 'T00:00:00')));
+    const w = byWeek[key] ?? (byWeek[key] = { count: 0, hours: 0 });
+    w.count++;
+    if (isWFH(e.day_type)) w.hours += +e.hours;
+  });
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const tbody = document.getElementById('report-tbody');
+  tbody.innerHTML = fyWeeks(fy).map(mon => {
+    const ws = formatDate(mon);
+    const week = byWeek[ws] ?? { count: 0, hours: 0 };
+    const submitted = week.count >= requiredDays(mon, fyStart, fyEnd);
+
+    let status, cls;
+    if (submitted)        { status = 'Submitted';   cls = 'submitted'; }
+    else if (mon > today) { status = 'Future';      cls = 'future';    }
+    else                  { status = 'Unsubmitted'; cls = 'unsubmitted'; }
+
+    // Hours are only meaningful once the week has been filled in.
+    const hours = submitted ? week.hours.toFixed(2) : '&#8212;';
+
+    return `<tr class="week-row" data-week-start="${ws}" tabindex="0">
+      <td>${fmtLabel(ws)} ${mon.getFullYear()}</td>
+      <td class="week-status ${cls}">${status}</td>
+      <td class="week-hours">${hours}</td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('.week-row').forEach(row => {
+    const open = () => openWeekInDiary(row.dataset.weekStart);
+    row.addEventListener('click', open);
+    row.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    });
+  });
+}
+
+// openWeekInDiary switches to the diary view showing the given week.
+function openWeekInDiary(weekStartStr) {
+  weekStart = getMonday(new Date(weekStartStr + 'T00:00:00'));
+  showView('diary');
 }
 
 // ── PDF / Print ────────────────────────────────────────────────────────────
