@@ -252,9 +252,9 @@ On app load (without a `?week=` query parameter), instead of always showing the 
 - Weeks are checked from the first Monday on or after July 1 of the current FY up to and including the current week's Monday; future weeks are not checked
 - The existing `?week=YYYY-MM-DD` URL query parameter still takes precedence over this logic
 
-#### Auto-Advance After Saving a Past Week
+#### Saving Stays on the Current Week
 
-After successfully saving a week that is before the current week, the app automatically advances to the **next incomplete week** (i.e. calls the API with `from_date = savedWeek + 7 days`). If no incomplete week is found from that point, it navigates to the current week. Saving the current week retains existing behaviour (stay on the current week).
+Saving never navigates away from the week being edited. After a successful save the app shows a "✓ Saved" confirmation and stays put; the user moves between weeks using the week navigation controls.
 
 #### Settings
 
